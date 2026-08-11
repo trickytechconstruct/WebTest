@@ -14,7 +14,6 @@
     display: block;
     background: #3a5a3a;
     cursor: default;
-    filter: url(#gammaFilter);
   }
   #musicToggleBtn {
     position: absolute;
@@ -226,15 +225,6 @@
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute">
-  <filter id="gammaFilter">
-    <feComponentTransfer>
-      <feFuncR id="gammaR" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncR>
-      <feFuncG id="gammaG" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncG>
-      <feFuncB id="gammaB" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncB>
-    </feComponentTransfer>
-  </filter>
-</svg>
 <div id="gammaBar">
   <span>☀️</span>
   <input type="range" id="gammaSlider" min="0.5" max="2.2" step="0.05" value="1">
@@ -286,6 +276,11 @@ const canvas = document.getElementById('gameCanvas');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+// LinearToneMapping is the one mode where toneMappingExposure is a simple,
+// predictable brightness multiplier (other modes add S-curve compression).
+// This is what the brightness/gamma slider drives — see gammaSlider below.
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 1;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xd98a63); // dusk sky — warm, low sun washing out toward the horizon
@@ -1349,19 +1344,15 @@ const triggerRampButton = e => { ensureAudio(); e.preventDefault(); spawnRamp();
 rampBtn.addEventListener('touchstart', triggerRampButton);
 rampBtn.addEventListener('mousedown', triggerRampButton);
 
-// Gamma slider (mobile only, but wired regardless) — drives a real SVG
-// gamma-correction filter applied to the canvas via CSS, not just a flat
-// brightness multiply. Standard display-gamma convention: output = input^(1/gamma).
+// Brightness/gamma slider (mobile only, but wired regardless). This used to
+// drive a CSS `filter: url(#svgFilter)` on the canvas, but Safari/iOS doesn't
+// reliably support referencing an SVG filter via CSS on a WebGL canvas — the
+// slider would move but nothing on screen changed. Driving the renderer's
+// own exposure instead works identically everywhere, iOS included, since
+// it's applied inside the actual WebGL render rather than as a CSS effect.
 const gammaSlider = document.getElementById('gammaSlider');
-const gammaFuncs = [
-  document.getElementById('gammaR'),
-  document.getElementById('gammaG'),
-  document.getElementById('gammaB')
-];
 gammaSlider.addEventListener('input', () => {
-  const gamma = parseFloat(gammaSlider.value) || 1;
-  const exponent = 1 / gamma;
-  for (const f of gammaFuncs) f.setAttribute('exponent', exponent);
+  renderer.toneMappingExposure = parseFloat(gammaSlider.value) || 1;
 });
 
 // ---------- COLLISION HELPERS ----------

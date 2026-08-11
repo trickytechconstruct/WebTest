@@ -1,0 +1,3683 @@
+Content is user-generated and unverified.
+
+
+4
+Learn about artifacts
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Loot - Driving Demo</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: #1a1a1a;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+  #gameCanvas {
+    display: block;
+    background: #3a5a3a;
+    cursor: default;
+    filter: url(#gammaFilter);
+  }
+  #musicToggleBtn {
+    position: absolute;
+    top: 12px; right: 12px;
+    width: 42px; height: 42px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.45);
+    border: 2px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 19px;
+    display: flex;
+    align-items: center; justify-content: center;
+    pointer-events: auto;
+    user-select: none;
+    cursor: pointer;
+    z-index: 15;
+    opacity: 1;
+    transition: opacity 0.2s;
+  }
+  #musicToggleBtn.muted {
+    opacity: 0.45;
+  }
+  #hud {
+    position: absolute;
+    top: 12px; left: 12px;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    font-size: 14px;
+    line-height: 1.5;
+    user-select: none;
+    pointer-events: none;
+  }
+  #hud .title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  #controlsHint {
+    transition: opacity 0.6s ease;
+  }
+  #speedo {
+    position: absolute;
+    bottom: 16px; right: 16px;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    border: 3px solid rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    user-select: none;
+    pointer-events: none;
+  }
+  #speedo .val { font-size: 26px; font-weight: bold; }
+  #speedo .unit { font-size: 10px; opacity: 0.7; }
+  #gammaBar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 34px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.4);
+    pointer-events: auto;
+    user-select: none;
+    z-index: 16;
+    color: #fff;
+    font-size: 14px;
+  }
+  #gammaBar input[type="range"] {
+    flex: 1;
+    accent-color: #ffdd55;
+  }
+  @media (max-width: 900px) {
+    #gammaBar { display: flex; }
+    #hud { top: 46px; }
+    #musicToggleBtn { top: 46px; }
+    #chaseAlert { top: 48px !important; }
+  }
+  #mobileControls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0; top: 0;
+    display: none;
+    pointer-events: none;
+  }
+  @media (max-width: 900px) {
+    #mobileControls { display: block; }
+  }
+  #leftControlCluster {
+    position: absolute;
+    bottom: 26px; left: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    pointer-events: none;
+  }
+  #joystickZone {
+    position: relative;
+    width: 132px; height: 132px;
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+  }
+  #joystickBase {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.35);
+  }
+  #joystickKnob {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 58px; height: 58px;
+    margin-left: -29px; margin-top: -29px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.35);
+    border: 2px solid rgba(255,255,255,0.65);
+    transition: background 0.1s;
+  }
+  #joystickZone.active #joystickKnob {
+    background: rgba(255,255,255,0.55);
+  }
+  #jturnBtn {
+    width: 110px;
+    padding: 9px 0;
+    border-radius: 10px;
+    background: rgba(255,221,85,0.16);
+    border: 2px solid rgba(255,221,85,0.55);
+    color: #ffdd55;
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+  }
+  #jturnBtn:active {
+    background: rgba(255,221,85,0.32);
+  }
+  #rampBtn {
+    width: 110px;
+    padding: 9px 0;
+    border-radius: 10px;
+    background: rgba(255,168,40,0.16);
+    border: 2px solid rgba(255,168,40,0.55);
+    color: #ffa828;
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+  }
+  #rampBtn:active {
+    background: rgba(255,168,40,0.32);
+  }
+  .padBtn {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 24px;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+    position: absolute;
+    /* speedo occupies right:16..106, bottom:16..106 — sit clear of that box */
+    bottom: 34px; right: 122px;
+  }
+  .dmgUnit {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    background: #d43a3a;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  .dmgUnit.lost {
+    background: rgba(255,255,255,0.08);
+    box-shadow: none;
+  }
+  #bustedOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    text-align: center;
+    z-index: 20;
+  }
+  #bustedOverlay .big {
+    font-size: 48px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="gammaFilter">
+    <feComponentTransfer>
+      <feFuncR id="gammaR" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncR>
+      <feFuncG id="gammaG" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncG>
+      <feFuncB id="gammaB" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncB>
+    </feComponentTransfer>
+  </filter>
+</svg>
+<div id="gammaBar">
+  <span>☀️</span>
+  <input type="range" id="gammaSlider" min="0.5" max="2.2" step="0.05" value="1">
+</div>
+<canvas id="gameCanvas"></canvas>
+<div id="hud">
+  <div class="title">🚗 LOOT — Driving Prototype</div>
+  <div id="controlsHint">
+    <div>Up = accelerator · Left/Right = steer · Down = brake/reverse · Space = handbrake drift · Alt = nitro</div>
+    <div style="opacity:0.75; font-size:12px;">On mobile: drag the thumbstick to drive and steer · 🔥 for nitro</div>
+  </div>
+  <div style="opacity:0.75; font-size:12px;">Buildings fade out when they block your view · Watch out for the police</div>
+  <div id="cashHUD" style="margin-top:6px; font-size:18px; font-weight:bold; color:#5fe87a;">💰 $0</div>
+  <div id="damageMeter" style="margin-top:6px; display:flex; gap:4px; align-items:center;">
+    <span style="font-size:12px; opacity:0.8; margin-right:2px;">DAMAGE</span>
+  </div>
+</div>
+<div id="speedo">
+  <div class="val" id="speedVal">0</div>
+  <div class="unit">MPH</div>
+</div>
+<div id="musicToggleBtn" title="Toggle music">🎵</div>
+<div id="nitroIndicator" style="position:absolute; bottom:112px; right:16px; color:#ffb020; font-weight:bold; text-shadow:0 1px 3px rgba(0,0,0,0.8); display:none; user-select:none; pointer-events:none;">🔥 NITRO</div>
+<div id="jturnIndicator" style="position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); color:#ffdd55; font-size:30px; font-weight:bold; letter-spacing:3px; text-shadow:0 2px 8px rgba(0,0,0,0.85); display:none; user-select:none; pointer-events:none;">J-TURN!</div>
+<div id="grappleIndicator" style="position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); color:#66ffcc; font-size:30px; font-weight:bold; letter-spacing:3px; text-shadow:0 2px 8px rgba(0,0,0,0.85); display:none; user-select:none; pointer-events:none;">GRAPPLE!</div>
+<div id="grappleHint" style="position:absolute; bottom:130px; left:50%; transform:translateX(-50%); color:#66ffcc; font-size:12px; font-weight:bold; letter-spacing:0.5px; text-shadow:0 1px 4px rgba(0,0,0,0.85); display:none; user-select:none; pointer-events:none;">⚡ DOUBLE-TAP TURN TO GRAPPLE</div>
+<div id="chaseAlert" style="position:absolute; top:14px; left:50%; transform:translateX(-50%); color:#fff; background:rgba(180,20,20,0.85); padding:6px 16px; border-radius:6px; font-weight:bold; letter-spacing:1px; display:none; user-select:none; pointer-events:none;">🚨 ALL UNITS INTERCEPT — 🚁 HELICOPTER TRACKING YOU 🚨</div>
+<div id="bustedOverlay">
+  <div class="big">🚔 BUSTED 🚔</div>
+  <div style="margin-top:8px; opacity:0.85;">Your Mustang took too much damage from the police</div>
+  <div style="margin-top:14px; font-size:20px;">Resetting in <span id="resetCountdown">5</span>...</div>
+</div>
+<div id="mobileControls">
+  <div id="leftControlCluster">
+    <div id="rampBtn">RAMP</div>
+    <div id="joystickZone">
+      <div id="joystickBase"></div>
+      <div id="joystickKnob"></div>
+    </div>
+    <div id="jturnBtn">J-TURN</div>
+  </div>
+  <div class="padBtn" id="btnNitro" style="background:rgba(255,140,0,0.35); border-color:rgba(255,180,60,0.7);">🔥</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+const canvas = document.getElementById('gameCanvas');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xd98a63); // dusk sky — warm, low sun washing out toward the horizon
+scene.fog = new THREE.Fog(0xd98a63, 500, 1900); // pulled in a bit from the old daylight range for a moodier dusk haze
+
+const camera3D = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 4000);
+
+function resizeRenderer() {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera3D.aspect = window.innerWidth / window.innerHeight;
+  camera3D.updateProjectionMatrix();
+}
+resizeRenderer();
+window.addEventListener('resize', resizeRenderer);
+
+const ambient = new THREE.AmbientLight(0x8a90c4, 0.38); // cooler, dimmer fill light for dusk
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffa552, 0.55); // warm, low sun — dimmer and lower-angled than the old daylight sun
+sun.position.set(700, 220, 300);
+scene.add(sun);
+
+// ---------- 3D MODEL LOADING ----------
+// Generic .glb/.gltf loader with a built-in fallback: if the file is missing,
+// unreachable, or fails to parse, `onFail` runs instead and the game keeps
+// using its primitive (box/cylinder) geometry — nothing ever breaks because
+// an art asset hasn't been dropped in yet.
+//
+// Models go in a "models/" folder placed right next to this HTML file, e.g.
+//   Loot_Proto.html
+//   models/
+//     car.glb
+//     police_car.glb
+//
+// Usage:
+//   loadGLTFModel('models/car.glb', (gltf) => { ...on success... }, () => { ...on fail/missing... });
+const gltfLoader = (typeof THREE.GLTFLoader === 'function') ? new THREE.GLTFLoader() : null;
+function loadGLTFModel(path, onSuccess, onFail) {
+  if (!gltfLoader) {
+    console.warn('[models] GLTFLoader not available — using primitive geometry.');
+    if (onFail) onFail();
+    return;
+  }
+  gltfLoader.load(
+    path,
+    (gltf) => {
+      console.log('[models] loaded', path);
+      onSuccess(gltf);
+    },
+    undefined, // progress callback — not needed for small local files
+    (err) => {
+      console.warn('[models] could not load', path, '— using primitive geometry instead.', err);
+      if (onFail) onFail();
+    }
+  );
+}
+
+// Turn any set of meshes into one mesh's worth of shadow-friendly material
+// tweak (Kenney/most free packs ship MeshStandardMaterial, which is fine
+// under our Lambert-lit scene, but this keeps them from looking blown out
+// under the strong ambient+sun combo above).
+function prepImportedModel(root, { castShadow = true } = {}) {
+  root.traverse((node) => {
+    if (node.isMesh) {
+      node.castShadow = castShadow;
+      node.receiveShadow = true;
+    }
+  });
+  return root;
+}
+
+// ---------- WORLD SETUP ----------
+const WORLD_W = 3000;
+const WORLD_H = 3000;
+const BLOCK = 500; // city block size
+const GRID_LINES = WORLD_W / BLOCK; // grid lines run 0..GRID_LINES on both axes
+
+// Build a simple grid city: roads run in a grid, buildings fill blocks
+const buildings = [];
+const roadWidth = 140;
+
+// Main avenues — a couple of interior grid lines are double-wide with a
+// median island, rather than every street being the same width.
+const AVENUE_WIDTH = 280;
+const AVENUE_MEDIAN_WIDTH = 24;
+const avenueIndices = new Set([0, 3, GRID_LINES]); // grid-line index (both axes) that is a main avenue — the very center plus both outer edges, none of which any police route's waypoints ever land on
+function roadWidthAt(idx) {
+  return avenueIndices.has(idx) ? AVENUE_WIDTH : roadWidth;
+}
+
+for (let bx = 0; bx < WORLD_W / BLOCK; bx++) {
+  for (let by = 0; by < WORLD_H / BLOCK; by++) {
+    const blockX = bx * BLOCK;
+    const blockY = by * BLOCK;
+    // building footprint inside the block, leaving margin for whichever road
+    // type borders each side (an avenue needs more clearance than a street)
+    const marginLeft = roadWidthAt(bx) / 2 + 20;
+    const marginRight = roadWidthAt(bx + 1) / 2 + 20;
+    const marginTop = roadWidthAt(by) / 2 + 20;
+    const marginBottom = roadWidthAt(by + 1) / 2 + 20;
+    const bw = BLOCK - marginLeft - marginRight;
+    const bh = BLOCK - marginTop - marginBottom;
+    // randomize building color & slight inset for variety
+    const colors = ['#7a7a82', '#8a7f6f', '#6f7a7f', '#877a7a', '#7f8a72'];
+    const color = colors[(bx * 7 + by * 13) % colors.length];
+    const height = 70 + ((bx * 31 + by * 17) % 140); // drives extruded wall height in the pseudo-3D view
+    buildings.push({
+      x: blockX + marginLeft,
+      y: blockY + marginTop,
+      w: bw,
+      h: bh,
+      color: color,
+      height: height
+    });
+  }
+}
+
+// Knockable street furniture — street lights (one per block), fire hydrants
+// (roughly a third of blocks), and blue collection mailboxes (roughly a
+// quarter of blocks, on a different corner), all sitting in the sidewalk gap
+// between the road pavement and the building line. Positions only here; the
+// actual meshes are built later once the THREE scene setup begins below.
+const knockableProps = [];
+for (let bx = 0; bx < WORLD_W / BLOCK; bx++) {
+  for (let by = 0; by < WORLD_H / BLOCK; by++) {
+    const blockX = bx * BLOCK;
+    const blockY = by * BLOCK;
+    const sidewalkLeft = blockX + roadWidthAt(bx) / 2 + 9;
+    const sidewalkTop = blockY + roadWidthAt(by) / 2 + 9;
+    const sidewalkRight = blockX + BLOCK - roadWidthAt(bx + 1) / 2 - 9;
+    const sidewalkBottom = blockY + BLOCK - roadWidthAt(by + 1) / 2 - 9;
+
+    knockableProps.push({ type: 'streetlight', x: sidewalkLeft, y: sidewalkTop, radius: 4 });
+    if ((bx + by * 2) % 3 === 0) {
+      knockableProps.push({ type: 'hydrant', x: sidewalkRight, y: sidewalkBottom, radius: 3 });
+    }
+    if ((bx * 2 + by) % 4 === 0) {
+      knockableProps.push({ type: 'mailbox', x: sidewalkRight, y: sidewalkTop, radius: 3 });
+    }
+  }
+}
+
+// Perimeter island — a solid ring running just outside the double-width
+// avenue that now rings the map edge (bx/by = 0 and GRID_LINES). Unlike the
+// interior avenue medians below, this one IS pushed into `buildings`, so it
+// collides like a wall/curb — this is the map's actual out-of-bounds
+// boundary, not just an invisible position clamp.
+const PERIMETER_ISLAND_WIDTH = 50;
+const perimeterOuterEdge = AVENUE_WIDTH / 2; // where the edge avenue's pavement ends
+const perimeterColor = '#3f7a3f';
+const perimeterHeight = 12; // a bit taller than interior medians so it reads as a real barrier
+buildings.push(
+  // left
+  {
+    x: -perimeterOuterEdge - PERIMETER_ISLAND_WIDTH,
+    y: -perimeterOuterEdge - PERIMETER_ISLAND_WIDTH,
+    w: PERIMETER_ISLAND_WIDTH,
+    h: WORLD_H + 2 * (perimeterOuterEdge + PERIMETER_ISLAND_WIDTH),
+    color: perimeterColor, height: perimeterHeight
+  },
+  // right
+  {
+    x: WORLD_W + perimeterOuterEdge,
+    y: -perimeterOuterEdge - PERIMETER_ISLAND_WIDTH,
+    w: PERIMETER_ISLAND_WIDTH,
+    h: WORLD_H + 2 * (perimeterOuterEdge + PERIMETER_ISLAND_WIDTH),
+    color: perimeterColor, height: perimeterHeight
+  },
+  // top
+  {
+    x: -perimeterOuterEdge,
+    y: -perimeterOuterEdge - PERIMETER_ISLAND_WIDTH,
+    w: WORLD_W + 2 * perimeterOuterEdge,
+    h: PERIMETER_ISLAND_WIDTH,
+    color: perimeterColor, height: perimeterHeight
+  },
+  // bottom
+  {
+    x: -perimeterOuterEdge,
+    y: WORLD_H + perimeterOuterEdge,
+    w: WORLD_W + 2 * perimeterOuterEdge,
+    h: PERIMETER_ISLAND_WIDTH,
+    color: perimeterColor, height: perimeterHeight
+  }
+);
+
+// Median islands for each avenue — kept separate from `buildings` (which
+// drives collision) so cars can drive straight through them; they still get
+// their own extruded visual rendering, just with no collision response.
+// Built as segments between consecutive grid lines rather than one
+// continuous strip, so there's a gap wherever a cross street or another
+// avenue crosses — real medians break at intersections instead of running
+// straight through them.
+const medianRects = [];
+const MEDIAN_INTERSECTION_CLEARANCE = 4; // extra gap beyond the crossing road's pavement edge
+function pushAxisMedians(indices, axis) {
+  for (const idx of indices) {
+    const center = idx * BLOCK;
+    for (let g = 0; g < GRID_LINES; g++) {
+      const segStart = g * BLOCK;
+      const segEnd = (g + 1) * BLOCK;
+      const startClear = roadWidthAt(g) / 2 + MEDIAN_INTERSECTION_CLEARANCE;
+      const endClear = roadWidthAt(g + 1) / 2 + MEDIAN_INTERSECTION_CLEARANCE;
+      const from = segStart + startClear;
+      const to = segEnd - endClear;
+      if (to <= from) continue; // segment too short (e.g. squeezed between two wide avenues) — skip it
+      if (axis === 'v') {
+        medianRects.push({ x: center - AVENUE_MEDIAN_WIDTH / 2, y: from, w: AVENUE_MEDIAN_WIDTH, h: to - from, color: '#3f7a3f', height: 7 });
+      } else {
+        medianRects.push({ x: from, y: center - AVENUE_MEDIAN_WIDTH / 2, w: to - from, h: AVENUE_MEDIAN_WIDTH, color: '#3f7a3f', height: 7 });
+      }
+    }
+  }
+}
+pushAxisMedians(avenueIndices, 'v');
+pushAxisMedians(avenueIndices, 'h');
+function isInMedian(x, y) {
+  for (const m of medianRects) {
+    if (x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h) return true;
+  }
+  return false;
+}
+
+// Decorative props: a few plazas / parked micro-cars for flavor (non-solid)
+const props = [];
+for (let i = 0; i < 40; i++) {
+  props.push({
+    x: Math.random() * WORLD_W,
+    y: Math.random() * WORLD_H,
+    r: 4 + Math.random() * 6,
+    type: Math.random() < 0.5 ? 'tree' : 'bush'
+  });
+}
+
+// Spawn off the exact center — that's where the two avenue medians cross
+const PLAYER_SPAWN_X = WORLD_W / 2 + 150;
+const PLAYER_SPAWN_Y = WORLD_H / 2 + 150;
+
+// ---------- STUNT RAMP ----------
+// No fixed ramp in the world — instead, double-tap Up (desktop) or the RAMP
+// button (mobile) spawns one a short distance ahead of wherever the player
+// currently is, aimed along whichever way they're currently facing. It
+// despawns automatically once the player has driven over/off it and landed,
+// or after a timeout if they never reach it. Physics + spawn/despawn logic
+// live in updateRampPhysics() / spawnRamp() / despawnRamp(), below.
+const GRAVITY = 900;      // px/s² — tuned for a satisfying arcade hang time, not real-world accurate
+const RAMP_LENGTH = 120;  // horizontal run of the climb
+const RAMP_HEIGHT = 45;   // height of the launch edge
+const RAMP_WIDTH = 90;
+const RAMP_SPAWN_DISTANCE = RAMP_LENGTH * 2; // "2 ramp lengths in front of the player"
+const RAMP_INCLINE = Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
+const RAMP_SLANT_LENGTH = Math.hypot(RAMP_LENGTH, RAMP_HEIGHT);
+const RAMP_LIFETIME_MS = 12000; // auto-despawns if the player never reaches it
+
+const rampMat = new THREE.MeshLambertMaterial({ color: 0xa8a8ac });
+const rampBackMat = new THREE.MeshLambertMaterial({ color: 0x8a8a8e });
+const rampRailMat = new THREE.MeshLambertMaterial({ color: 0xd8a83a });
+
+let rampState = null; // null = no ramp currently in the world
+
+function spawnRamp() {
+  if (rampState || damageState.busted) return; // only one at a time
+
+  const angle = car.angle;
+  const forwardX = Math.cos(angle), forwardY = Math.sin(angle);
+  const rightX = -forwardY, rightY = forwardX;
+  const entryX = car.x + forwardX * RAMP_SPAWN_DISTANCE;
+  const entryY = car.y + forwardY * RAMP_SPAWN_DISTANCE;
+  const midX = entryX + forwardX * (RAMP_LENGTH / 2);
+  const midY = entryY + forwardY * (RAMP_LENGTH / 2);
+
+  const group = new THREE.Group();
+  group.position.set(midX, 0, midY);
+  group.rotation.y = -angle; // local +X now points the same way the car was facing at spawn
+
+  const surface = new THREE.Mesh(new THREE.BoxGeometry(RAMP_SLANT_LENGTH, 6, RAMP_WIDTH), rampMat);
+  surface.position.set(0, RAMP_HEIGHT / 2, 0);
+  surface.rotation.z = RAMP_INCLINE; // tilts the +X (exit/forward) end upward
+  group.add(surface);
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(6, RAMP_HEIGHT, RAMP_WIDTH), rampBackMat);
+  back.position.set(RAMP_LENGTH / 2 + 2, RAMP_HEIGHT / 2, 0);
+  group.add(back);
+
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(RAMP_SLANT_LENGTH, 8, 4), rampRailMat);
+    rail.position.set(0, RAMP_HEIGHT / 2 + 3, side * (RAMP_WIDTH / 2 + 2));
+    rail.rotation.z = RAMP_INCLINE;
+    group.add(rail);
+  }
+
+  scene.add(group);
+
+  rampState = {
+    group, entryX, entryY, forwardX, forwardY, rightX, rightY,
+    spawnedAt: performance.now(),
+    engaged: false // true once the player has actually driven onto it
+  };
+}
+
+function despawnRamp() {
+  if (!rampState) return;
+  rampState.group.traverse(n => { if (n.geometry) n.geometry.dispose(); });
+  scene.remove(rampState.group);
+  rampState = null;
+}
+
+// ---------- GRAPPLE TURN ----------
+// Double-tap Left/Right (desktop) or double-flick the thumbstick that way
+// (mobile) while approaching an intersection. If the timing's right — not
+// too far out, not already past it — a grapple line fires to a point beyond
+// the corner and reels the car through a perfect quarter-circle turn down
+// the center of the new road, preserving (and slightly boosting) momentum.
+// Feature flag — flip to false to disable Grapple Turn entirely (no hint,
+// no double-tap/flick trigger, no rope). Left on by default.
+const ENABLE_GRAPPLE_TURN = true;
+
+const GRAPPLE_MIN_DIST = 60;   // too close to the intersection — mistimed
+const GRAPPLE_MAX_DIST = 230;  // too far out — mistimed
+const GRAPPLE_ANCHOR_HEIGHT = 55;
+
+const grapple = {
+  active: false, elapsed: 0, duration: 0.5, turnDir: 1,
+  startAngle: 0, exitSpeed: 0,
+  center: { x: 0, y: 0 }, radiusVec: { x: 0, y: 0 }
+};
+
+// Finds the next grid intersection ahead along whichever axis the car is
+// mostly traveling on (roads are grid-aligned, so this is reliable as long
+// as the car is roughly pointed down a road rather than driving diagonally
+// across open ground). Returns null near the map edge with nothing ahead.
+function findUpcomingIntersection() {
+  const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
+  let ix, iy, dist;
+  if (Math.abs(fx) >= Math.abs(fy)) {
+    const nextK = fx > 0 ? Math.ceil((car.x + 1) / BLOCK) : Math.floor((car.x - 1) / BLOCK);
+    if (nextK < 0 || nextK > GRID_LINES) return null;
+    ix = nextK * BLOCK;
+    iy = Math.round(car.y / BLOCK) * BLOCK;
+    dist = Math.abs(ix - car.x) / Math.abs(fx);
+  } else {
+    const nextK = fy > 0 ? Math.ceil((car.y + 1) / BLOCK) : Math.floor((car.y - 1) / BLOCK);
+    if (nextK < 0 || nextK > GRID_LINES) return null;
+    iy = nextK * BLOCK;
+    ix = Math.round(car.x / BLOCK) * BLOCK;
+    dist = Math.abs(iy - car.y) / Math.abs(fy);
+  }
+  return { x: ix, y: iy, dist };
+}
+
+function attemptGrappleTurn(turnDir) {
+  if (!ENABLE_GRAPPLE_TURN) return;
+  if (damageState.busted || jTurn.active || grapple.active || car.airborne || car.onRamp) return;
+  const info = findUpcomingIntersection();
+  if (!info || info.dist < GRAPPLE_MIN_DIST || info.dist > GRAPPLE_MAX_DIST) return; // mistimed — no penalty, just ignored
+  performGrappleTurn(turnDir, info.dist);
+}
+
+function performGrappleTurn(turnDir, R) {
+  const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
+  const rightX = -fy, rightY = fx;
+  const exitX = turnDir > 0 ? rightX : -rightX;
+  const exitY = turnDir > 0 ? rightY : -rightY;
+
+  const entryX = car.x, entryY = car.y;
+  const centerX = entryX + R * exitX;
+  const centerY = entryY + R * exitY;
+
+  const speedAtTrigger = Math.max(140, Math.abs(car.speed));
+  const arcLength = R * (Math.PI / 2);
+
+  grapple.active = true;
+  grapple.elapsed = 0;
+  grapple.duration = Math.max(0.3, Math.min(1.1, arcLength / speedAtTrigger));
+  grapple.turnDir = turnDir;
+  grapple.startAngle = car.angle;
+  grapple.center.x = centerX;
+  grapple.center.y = centerY;
+  grapple.radiusVec.x = entryX - centerX;
+  grapple.radiusVec.y = entryY - centerY;
+  grapple.exitSpeed = speedAtTrigger;
+
+  showGrappleRope(centerX, GRAPPLE_ANCHOR_HEIGHT, centerY);
+  spawnSparks(centerX, GRAPPLE_ANCHOR_HEIGHT, centerY, 12);
+  grappleIndicatorEl.style.display = 'block';
+}
+
+// Updates the scripted arc each frame while active, and shows/hides the
+// readiness hint the rest of the time. Called once per frame from update(),
+// after car.x/car.y have already been integrated normally for this frame
+// (that normal straight-line integration is simply overwritten below while
+// the grapple is active).
+function updateGrapple(dt) {
+  if (grapple.active) {
+    grapple.elapsed += dt;
+    const t = Math.min(1, grapple.elapsed / grapple.duration);
+    const sweep = grapple.turnDir * (Math.PI / 2) * t;
+    const cosS = Math.cos(sweep), sinS = Math.sin(sweep);
+    const rx = grapple.radiusVec.x, ry = grapple.radiusVec.y;
+    car.x = grapple.center.x + (rx * cosS - ry * sinS);
+    car.y = grapple.center.y + (rx * sinS + ry * cosS);
+    car.angle = grapple.startAngle + sweep;
+    updateGrappleRopeGeometry();
+    if (t >= 1) {
+      grapple.active = false;
+      car.vx = grapple.exitSpeed * Math.cos(car.angle);
+      car.vy = grapple.exitSpeed * Math.sin(car.angle);
+      car.speed = grapple.exitSpeed;
+      hideGrappleRope();
+      grappleIndicatorEl.style.display = 'none';
+    }
+    grappleHintEl.style.display = 'none';
+  } else if (ENABLE_GRAPPLE_TURN && !damageState.busted && !jTurn.active && !car.airborne && !car.onRamp) {
+    const info = findUpcomingIntersection();
+    const ready = info && info.dist >= GRAPPLE_MIN_DIST && info.dist <= GRAPPLE_MAX_DIST;
+    grappleHintEl.style.display = ready ? 'block' : 'none';
+  } else {
+    grappleHintEl.style.display = 'none';
+  }
+}
+
+// ---------- CAR SETUP ----------
+const car = {
+  x: PLAYER_SPAWN_X,
+  y: PLAYER_SPAWN_Y,
+  angle: -Math.PI / 2, // facing up (nose direction)
+  vx: 0,               // actual world-space velocity — no longer locked to angle
+  vy: 0,
+  speed: 0,             // scalar speed magnitude, derived from vx/vy each frame
+  maxSpeed: 620,         // px/s forward
+  accel: 620,
+  reverseAccel: 680,      // doubled — reverses much more urgently than before (was half of forward accel)
+  brakeDecel: 1100,        // deceleration while braking (down, still moving forward)
+  friction: 260,         // rolling resistance / natural drag when coasting
+  turnRate: 3.0,          // rad/s — steering rate at full speed
+  grip: 4.2,               // how fast velocity corrects toward the nose direction (lower = more drift)
+  driftGrip: 1.1,           // grip while handbrake is held — much looser, big slides
+  lean: 0,                  // current visual body-roll angle (radians), purely cosmetic
+  maxLean: 0.26,             // cap on how far the car leans into a turn/drift
+  width: 34,
+  length: 54,
+  color: '#e0432b',
+  nitroTimer: 0,               // seconds of nitro boost remaining
+  nitroDuration: 1.5,
+  nitroMaxSpeedMult: 1.45,
+  nitroAccelMult: 1.4,
+  nitroBurst: 220,               // instant speed kick applied the moment nitro triggers
+  medianLeafTimer: 0,                // cooldown between leaf-particle bursts while crossing a median
+  z: 0,          // height above ground — 0 unless on the ramp or airborne
+  vz: 0,         // vertical velocity, used while on the ramp incline / mid-air
+  pitch: 0,      // nose-up/down tilt (radians), purely cosmetic — driven by the ramp
+  airborne: false,
+  onRamp: false  // true only while physically driving on the ramp's sloped surface
+};
+
+// ---------- DAMAGE ----------
+const MAX_DAMAGE = 5;
+const RESET_COUNTDOWN = 5;
+const damageState = { hp: MAX_DAMAGE, invulnTimer: 0, busted: false, resetTimer: 0 };
+
+const damageMeterEl = document.getElementById('damageMeter');
+for (let i = 0; i < MAX_DAMAGE; i++) {
+  const unit = document.createElement('div');
+  unit.className = 'dmgUnit';
+  unit.id = 'dmgUnit' + i;
+  damageMeterEl.appendChild(unit);
+}
+function updateDamageUI() {
+  for (let i = 0; i < MAX_DAMAGE; i++) {
+    const el = document.getElementById('dmgUnit' + i);
+    el.classList.toggle('lost', i >= damageState.hp);
+  }
+}
+
+// ---------- PLAYER CASH ----------
+// Running total of cash knocked loose from armored trucks — see the
+// ---------- ARMORED TRUCKS ---------- section further down for where this
+// actually gets incremented.
+let playerCash = 0;
+const cashHUDEl = document.getElementById('cashHUD');
+function updateCashHUD() {
+  cashHUDEl.textContent = '💰 $' + playerCash.toLocaleString();
+}
+updateCashHUD();
+
+function takeDamage(amount) {
+  if (damageState.invulnTimer > 0 || damageState.busted) return false;
+  damageState.hp = Math.max(0, damageState.hp - amount);
+  damageState.invulnTimer = 1.5; // brief grace period so one hit isn't several hits per second
+  updateDamageUI();
+  if (damageState.hp <= 0) {
+    damageState.busted = true;
+    damageState.resetTimer = RESET_COUNTDOWN;
+    document.getElementById('resetCountdown').textContent = RESET_COUNTDOWN;
+    document.getElementById('bustedOverlay').style.display = 'flex';
+  }
+  return true;
+}
+updateDamageUI();
+
+const controlsHintEl = document.getElementById('controlsHint');
+let controlsHintHidden = false;
+
+const musicToggleBtn = document.getElementById('musicToggleBtn');
+musicToggleBtn.addEventListener('click', () => {
+  ensureAudio();
+  setMusicEnabled(!musicEnabled);
+});
+
+// ---------- ENGINE & TIRE SOUND (synthesized — no audio files needed) ----------
+// Browsers block audio until a user gesture, so the AudioContext is created
+// lazily on the first key press / touch and resumed if it was suspended.
+let audioCtx = null;
+let engineOsc, engineGain, engineFilter;
+let screechSource, screechGain, screechFilter;
+function createNoiseBuffer(duration) {
+  const sampleRate = audioCtx.sampleRate;
+  const length = Math.floor(sampleRate * duration);
+  const buffer = audioCtx.createBuffer(1, length, sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+function setupEngineSound() {
+  engineOsc = audioCtx.createOscillator();
+  engineOsc.type = 'sawtooth';
+  engineOsc.frequency.value = 55;
+  engineFilter = audioCtx.createBiquadFilter();
+  engineFilter.type = 'lowpass';
+  engineFilter.frequency.value = 900;
+  engineGain = audioCtx.createGain();
+  engineGain.gain.value = 0;
+  engineOsc.connect(engineFilter);
+  engineFilter.connect(engineGain);
+  engineGain.connect(audioCtx.destination);
+  engineOsc.start();
+}
+function setupTireScreechSound() {
+  screechSource = audioCtx.createBufferSource();
+  screechSource.buffer = createNoiseBuffer(2);
+  screechSource.loop = true;
+  screechFilter = audioCtx.createBiquadFilter();
+  screechFilter.type = 'bandpass';
+  screechFilter.frequency.value = 4200;
+  screechFilter.Q.value = 2.8;
+  screechGain = audioCtx.createGain();
+  screechGain.gain.value = 0;
+  screechSource.connect(screechFilter);
+  screechFilter.connect(screechGain);
+  screechGain.connect(audioCtx.destination);
+  screechSource.start();
+}
+let policeScreechSource, policeScreechGain, policeScreechFilter;
+function setupPoliceScreechSound() {
+  policeScreechSource = audioCtx.createBufferSource();
+  policeScreechSource.buffer = createNoiseBuffer(2);
+  policeScreechSource.loop = true;
+  policeScreechFilter = audioCtx.createBiquadFilter();
+  policeScreechFilter.type = 'bandpass';
+  policeScreechFilter.frequency.value = 4000;
+  policeScreechFilter.Q.value = 2.6;
+  policeScreechGain = audioCtx.createGain();
+  policeScreechGain.gain.value = 0;
+  policeScreechSource.connect(policeScreechFilter);
+  policeScreechFilter.connect(policeScreechGain);
+  policeScreechGain.connect(audioCtx.destination);
+  policeScreechSource.start();
+}
+let sirenOsc, sirenGain;
+function setupSirenSound() {
+  sirenOsc = audioCtx.createOscillator();
+  sirenOsc.type = 'sine';
+  sirenOsc.frequency.value = 650;
+  sirenGain = audioCtx.createGain();
+  sirenGain.gain.value = 0;
+  sirenOsc.connect(sirenGain);
+  sirenGain.connect(audioCtx.destination);
+  sirenOsc.start();
+}
+let heliOsc1, heliOsc2, heliFilter, heliGain;
+function setupHelicopterSound() {
+  // Two closely-detuned low oscillators beating against each other for a
+  // thick drone, with the rotor "chop" layered on as an amplitude wobble in
+  // updateHelicopterSound() rather than a true audio-rate LFO.
+  heliOsc1 = audioCtx.createOscillator();
+  heliOsc1.type = 'sawtooth';
+  heliOsc1.frequency.value = 42;
+  heliOsc2 = audioCtx.createOscillator();
+  heliOsc2.type = 'sawtooth';
+  heliOsc2.frequency.value = 46;
+  heliFilter = audioCtx.createBiquadFilter();
+  heliFilter.type = 'lowpass';
+  heliFilter.frequency.value = 450;
+  heliGain = audioCtx.createGain();
+  heliGain.gain.value = 0;
+  heliOsc1.connect(heliFilter);
+  heliOsc2.connect(heliFilter);
+  heliFilter.connect(heliGain);
+  heliGain.connect(audioCtx.destination);
+  heliOsc1.start();
+  heliOsc2.start();
+}
+// ---------- BACKGROUND MUSIC: synth-heavy jazz (lounge pad + walking bass + brushed swing) ----------
+// Fully synthesized and scheduled directly through Web Audio's own precise
+// start()/stop() timing — no audio files, no JS-timer-driven note ticking.
+// A coarse interval just tops up the schedule a few seconds ahead of time.
+let musicEnabled = true;
+let musicGain = null;
+let musicNextChordTime = 0;
+let musicChordIndex = 0;
+let musicSchedulerHandle = null;
+const MUSIC_BPM = 76;
+const MUSIC_BEAT = 60 / MUSIC_BPM;
+const MUSIC_BAR = MUSIC_BEAT * 4;
+const MUSIC_LOOKAHEAD = 6; // seconds scheduled ahead of "now" on every top-up
+
+// Classic I – vi – ii – V jazz turnaround (with 7ths), the harmonic backbone
+// of countless lounge/jazz standards. Frequencies are the chord's own
+// register; the walking bass and lead play the same tones an octave apart.
+const MUSIC_CHORDS = [
+  [261.63, 329.63, 392.00, 493.88], // Cmaj7 — C4 E4 G4 B4
+  [220.00, 261.63, 329.63, 392.00], // Am7   — A3 C4 E4 G4
+  [293.66, 349.23, 440.00, 523.25], // Dm7   — D4 F4 A4 C5
+  [196.00, 246.94, 293.66, 349.23], // G7    — G3 B3 D4 F4
+];
+
+function setupMusic() {
+  musicGain = audioCtx.createGain();
+  musicGain.gain.value = musicEnabled ? 0.5 : 0;
+  musicGain.connect(audioCtx.destination);
+  musicNextChordTime = audioCtx.currentTime + 0.3;
+  musicChordIndex = 0;
+  scheduleMusicAhead();
+  musicSchedulerHandle = setInterval(scheduleMusicAhead, 1500);
+}
+
+// Warm detuned sine+triangle pad, slow attack/release — the "synth" wash
+// under everything else.
+function playPadChord(tones, startTime, duration) {
+  const chordGain = audioCtx.createGain();
+  chordGain.gain.setValueAtTime(0, startTime);
+  chordGain.gain.linearRampToValueAtTime(0.09, startTime + 0.7);
+  chordGain.gain.setValueAtTime(0.09, startTime + duration - 0.6);
+  chordGain.gain.linearRampToValueAtTime(0, startTime + duration);
+  const padFilter = audioCtx.createBiquadFilter();
+  padFilter.type = 'lowpass';
+  padFilter.frequency.value = 1400;
+  padFilter.Q.value = 0.6;
+  chordGain.connect(padFilter);
+  padFilter.connect(musicGain);
+
+  for (const freq of tones) {
+    for (const detuneCents of [-4, 0, 5]) {
+      const osc = audioCtx.createOscillator();
+      osc.type = detuneCents === 0 ? 'sine' : 'triangle';
+      osc.frequency.value = freq;
+      osc.detune.value = detuneCents;
+      osc.connect(chordGain);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.05);
+    }
+  }
+}
+
+// Plucked upright-style walking bass note.
+function playBassNote(freq, startTime, duration) {
+  const bassGain = audioCtx.createGain();
+  bassGain.gain.setValueAtTime(0.0001, startTime);
+  bassGain.gain.exponentialRampToValueAtTime(0.22, startTime + 0.02);
+  bassGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  const bassFilter = audioCtx.createBiquadFilter();
+  bassFilter.type = 'lowpass';
+  bassFilter.frequency.value = 500;
+  bassGain.connect(bassFilter);
+  bassFilter.connect(musicGain);
+  const osc = audioCtx.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.value = freq;
+  osc.connect(bassGain);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.02);
+}
+
+// Soft brushed hi-hat tick (filtered noise burst) — accented on the swung upbeat.
+function playSwingHat(startTime, accent) {
+  const src = audioCtx.createBufferSource();
+  src.buffer = createNoiseBuffer(0.1);
+  const hatFilter = audioCtx.createBiquadFilter();
+  hatFilter.type = 'highpass';
+  hatFilter.frequency.value = 6000;
+  const hatGain = audioCtx.createGain();
+  hatGain.gain.setValueAtTime(accent ? 0.06 : 0.032, startTime);
+  hatGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.09);
+  src.connect(hatFilter);
+  hatFilter.connect(hatGain);
+  hatGain.connect(musicGain);
+  src.start(startTime);
+  src.stop(startTime + 0.1);
+}
+
+// Mellow synth lead with a genuine audio-rate vibrato LFO on frequency (safe
+// here, unlike gain modulation, since there's no "can't go negative" issue).
+function playLeadNote(freq, startTime, duration) {
+  const leadGain = audioCtx.createGain();
+  leadGain.gain.setValueAtTime(0, startTime);
+  leadGain.gain.linearRampToValueAtTime(0.07, startTime + 0.15);
+  leadGain.gain.setValueAtTime(0.07, startTime + duration - 0.3);
+  leadGain.gain.linearRampToValueAtTime(0, startTime + duration);
+  const leadFilter = audioCtx.createBiquadFilter();
+  leadFilter.type = 'lowpass';
+  leadFilter.frequency.value = 2200;
+  leadGain.connect(leadFilter);
+  leadFilter.connect(musicGain);
+
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = freq;
+  osc.connect(leadGain);
+
+  const vibrato = audioCtx.createOscillator();
+  vibrato.type = 'sine';
+  vibrato.frequency.value = 5.5;
+  const vibratoGain = audioCtx.createGain();
+  vibratoGain.gain.value = 3; // +/- 3 Hz wobble
+  vibrato.connect(vibratoGain);
+  vibratoGain.connect(osc.frequency);
+
+  osc.start(startTime);
+  vibrato.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+  vibrato.stop(startTime + duration + 0.05);
+}
+
+function scheduleMusicAhead() {
+  if (!audioCtx) return;
+  while (musicNextChordTime < audioCtx.currentTime + MUSIC_LOOKAHEAD) {
+    const tones = MUSIC_CHORDS[musicChordIndex % MUSIC_CHORDS.length];
+    const barStart = musicNextChordTime;
+
+    playPadChord(tones, barStart, MUSIC_BAR);
+
+    // Walking bass, one octave down: root, up to the 3rd tone, root, 2nd tone
+    const walk = [tones[0] / 2, tones[2] / 2, tones[0] / 2, tones[1] / 2];
+    for (let b = 0; b < 4; b++) {
+      playBassNote(walk[b], barStart + b * MUSIC_BEAT, MUSIC_BEAT * 0.85);
+    }
+
+    // Swung brushed hats: soft on-beat, accented swung upbeat (~2/3 through the beat)
+    for (let b = 0; b < 4; b++) {
+      const beatStart = barStart + b * MUSIC_BEAT;
+      playSwingHat(beatStart, false);
+      playSwingHat(beatStart + MUSIC_BEAT * 0.67, true);
+    }
+
+    // Occasional relaxed lead phrase, an octave up — not every bar, so it breathes
+    if (Math.random() < 0.55) {
+      const note = tones[Math.floor(Math.random() * tones.length)] * 2;
+      playLeadNote(note, barStart + MUSIC_BEAT * (1 + Math.random()), MUSIC_BEAT * 1.5);
+    }
+
+    musicNextChordTime += MUSIC_BAR;
+    musicChordIndex++;
+  }
+}
+function setMusicEnabled(enabled) {
+  musicEnabled = enabled;
+  if (musicGain) {
+    musicGain.gain.setTargetAtTime(enabled ? 0.5 : 0, audioCtx.currentTime, 0.15);
+  }
+  musicToggleBtn.classList.toggle('muted', !enabled);
+  musicToggleBtn.textContent = enabled ? '🎵' : '🔇';
+}
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    setupEngineSound();
+    setupTireScreechSound();
+    setupPoliceScreechSound();
+    setupSirenSound();
+    setupHelicopterSound();
+    setupMusic();
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+// Engine note rises with speed and throttle, like a simple one-gear RPM.
+function updateEngineSound(throttleMag, speedRatio) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const targetFreq = 55 + speedRatio * 260 + throttleMag * 55;
+  const targetGain = damageState.busted ? 0 : 0.05 + speedRatio * 0.1 + throttleMag * 0.07;
+  engineOsc.frequency.setTargetAtTime(targetFreq, now, 0.06);
+  engineGain.gain.setTargetAtTime(targetGain, now, 0.1);
+}
+// Tires screech in proportion to how hard the car is sliding sideways —
+// chopped into short on/off pulses (a faster chop the harder it's sliding)
+// so it reads as tires skipping on the pavement rather than a steady tone.
+function updateTireScreechSound(lateralSpeed) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (lateralSpeed > 90) {
+    const intensity = Math.min(1, (lateralSpeed - 90) / 260);
+    const peakGain = 0.5 * intensity;
+    const chopRate = 11 + intensity * 8; // faster skipping the harder it's sliding
+    const dutyCycle = 0.5; // "on" just under half the cycle — short skips, longer gaps
+    const phase = (now * chopRate) % 1;
+    const targetGain = phase < dutyCycle ? peakGain : 0;
+    screechFilter.frequency.setTargetAtTime(4200 + intensity * 1100, now, 0.03);
+    screechGain.gain.setTargetAtTime(targetGain, now, 0.015);
+  } else {
+    screechGain.gain.setTargetAtTime(0, now, 0.05);
+  }
+}
+// Same staccato-skip treatment as the player's tires, but for whichever
+// police car is sliding hardest this frame, with volume falling off by
+// distance to the player (same falloff style as the siren).
+function updatePoliceScreechSound(lateralProxy, nearestDist) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (lateralProxy > 90 && nearestDist < Infinity) {
+    const intensity = Math.min(1, (lateralProxy - 90) / 260);
+    const falloff = Math.max(0, 1 - nearestDist / 700);
+    const peakGain = 0.42 * intensity * falloff;
+    const chopRate = 11 + intensity * 8;
+    const dutyCycle = 0.5;
+    const phase = (now * chopRate) % 1;
+    const targetGain = phase < dutyCycle ? peakGain : 0;
+    policeScreechFilter.frequency.setTargetAtTime(4000 + intensity * 1000, now, 0.03);
+    policeScreechGain.gain.setTargetAtTime(targetGain, now, 0.015);
+  } else {
+    policeScreechGain.gain.setTargetAtTime(0, now, 0.05);
+  }
+}
+// Classic two-tone wail, volume falling off with distance to the nearest
+// actively-chasing police car. Silent when nothing's chasing.
+function updateSirenSound(anyChasing, nearestChaseDist) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (anyChasing && nearestChaseDist < Infinity) {
+    const wail = Math.sin(now * Math.PI * 2 * 0.6); // slow "nee-naw" cycle
+    const freq = 620 + wail * 260;
+    const falloff = Math.max(0, 1 - nearestChaseDist / 1000);
+    sirenOsc.frequency.setTargetAtTime(freq, now, 0.03);
+    sirenGain.gain.setTargetAtTime(falloff * 0.18, now, 0.08);
+  } else {
+    sirenGain.gain.setTargetAtTime(0, now, 0.2);
+  }
+}
+// Rotor drone with a chopping amplitude wobble, fading with distance and
+// silent whenever the helicopter isn't actually on scene.
+function updateHelicopterSound(active, distToPlayer) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  let target = 0;
+  if (active) {
+    const falloff = Math.max(0, 1 - distToPlayer / 900);
+    const chop = 0.6 + 0.4 * Math.sin(now * Math.PI * 2 * 8.5);
+    target = falloff * 0.22 * chop;
+  }
+  heliGain.gain.setTargetAtTime(target, now, 0.05);
+}
+
+const keys = {};
+function triggerNitro() {
+  if (damageState.busted) return;
+  car.nitroTimer = car.nitroDuration;
+  car.vx += Math.cos(car.angle) * car.nitroBurst;
+  car.vy += Math.sin(car.angle) * car.nitroBurst;
+}
+
+// J-Turn: double-tap Down spins the car a scripted 180° while it keeps
+// coasting on its existing momentum (vx/vy are world-space and untouched
+// here), so it ends up facing the opposite direction without ever having to
+// slow to a stop — a proper reverse bootlegger turn.
+const jTurnIndicatorEl = document.getElementById('jturnIndicator');
+const jTurn = { active: false, elapsed: 0, duration: 0.45, startAngle: 0, spinDir: 1 };
+
+// Grapple Turn visuals: a thin glowing line from the car's roof to the
+// anchor point, plus a small glow sprite marking the anchor itself. Both
+// just toggle visible/invisible rather than being added/removed each time.
+const grappleIndicatorEl = document.getElementById('grappleIndicator');
+const grappleHintEl = document.getElementById('grappleHint');
+const grappleRopeMat = new THREE.LineBasicMaterial({ color: 0x66ffcc });
+const grappleRopeGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const grappleRope = new THREE.Line(grappleRopeGeo, grappleRopeMat);
+grappleRope.visible = false;
+scene.add(grappleRope);
+const grappleAnchorGlowTex = createGlowTexture(0x66ffcc);
+const grappleAnchorGlow = makeGlowSprite(grappleAnchorGlowTex, 20);
+grappleAnchorGlow.visible = false;
+scene.add(grappleAnchorGlow);
+const grappleAnchorPos = new THREE.Vector3();
+
+function showGrappleRope(x, y, z) {
+  grappleAnchorPos.set(x, y, z);
+  grappleAnchorGlow.position.copy(grappleAnchorPos);
+  grappleRope.visible = true;
+  grappleAnchorGlow.visible = true;
+  updateGrappleRopeGeometry();
+}
+function hideGrappleRope() {
+  grappleRope.visible = false;
+  grappleAnchorGlow.visible = false;
+}
+function updateGrappleRopeGeometry() {
+  const pos = grappleRope.geometry.attributes.position.array;
+  pos[0] = car.x; pos[1] = 16; pos[2] = car.y;
+  pos[3] = grappleAnchorPos.x; pos[4] = grappleAnchorPos.y; pos[5] = grappleAnchorPos.z;
+  grappleRope.geometry.attributes.position.needsUpdate = true;
+}
+let lastDownPressTime = -Infinity;
+const J_TURN_DOUBLE_TAP_WINDOW = 350; // ms
+let lastUpPressTime = -Infinity;
+const RAMP_DOUBLE_TAP_WINDOW = 350; // ms
+let lastLeftPressTime = -Infinity;
+let lastRightPressTime = -Infinity;
+const GRAPPLE_DOUBLE_TAP_WINDOW = 350; // ms — shared by keyboard double-tap and the mobile double-flick
+function triggerJTurn() {
+  if (damageState.busted || jTurn.active) return;
+  jTurn.active = true;
+  jTurn.elapsed = 0;
+  jTurn.startAngle = car.angle;
+  // Spin toward whichever way the car is already sliding, so it feels like
+  // a natural continuation of the flick rather than an arbitrary direction.
+  const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
+  const rightX = -fy, rightY = fx;
+  const lateralSigned = car.vx * rightX + car.vy * rightY;
+  jTurn.spinDir = lateralSigned < 0 ? -1 : 1;
+  spawnSparks(car.x, 6, car.y, 16);
+  jTurnIndicatorEl.style.display = 'block';
+}
+window.addEventListener('keydown', e => {
+  ensureAudio();
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' ','alt'].includes(k)) e.preventDefault();
+  if (k === 'alt' && !keys[k]) triggerNitro(); // one-shot: only on the initial press, not key-repeat
+  if ((k === 'arrowdown' || k === 's') && !keys[k]) {
+    const now = performance.now();
+    if (now - lastDownPressTime < J_TURN_DOUBLE_TAP_WINDOW) triggerJTurn();
+    lastDownPressTime = now;
+  }
+  if ((k === 'arrowup' || k === 'w') && !keys[k]) {
+    const now = performance.now();
+    if (now - lastUpPressTime < RAMP_DOUBLE_TAP_WINDOW) spawnRamp();
+    lastUpPressTime = now;
+  }
+  if ((k === 'arrowleft' || k === 'a') && !keys[k]) {
+    const now = performance.now();
+    if (now - lastLeftPressTime < GRAPPLE_DOUBLE_TAP_WINDOW) attemptGrappleTurn(-1);
+    lastLeftPressTime = now;
+  }
+  if ((k === 'arrowright' || k === 'd') && !keys[k]) {
+    const now = performance.now();
+    if (now - lastRightPressTime < GRAPPLE_DOUBLE_TAP_WINDOW) attemptGrappleTurn(1);
+    lastRightPressTime = now;
+  }
+  keys[k] = true;
+});
+window.addEventListener('keyup', e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// Mobile thumbstick: replaces the old left/right/gas/brake buttons with a
+// single analog stick. x/y are normalized -1..1 (x: left/right tilt, y:
+// screen-down-positive tilt — pushing the stick up/forward gives negative y).
+const touchStick = { active: false, x: 0, y: 0 };
+const joystickZone = document.getElementById('joystickZone');
+const joystickKnob = document.getElementById('joystickKnob');
+const JOYSTICK_RADIUS = 66; // half of #joystickZone's CSS width/height
+let joystickPointerId = null;
+
+// Mobile equivalent of a keyboard double-tap: flicking the stick hard to one
+// side counts as a "tap" in that direction. Edge-triggered (only fires the
+// instant it crosses the threshold, not continuously while held over), and
+// shares lastLeftPressTime/lastRightPressTime + the same window as keyboard.
+const GRAPPLE_FLICK_THRESHOLD = 0.75;
+const GRAPPLE_FLICK_RESET = 0.35; // has to come back this close to center before it can register again
+let stickPastLeft = false, stickPastRight = false;
+function checkStickFlick() {
+  if (touchStick.x < -GRAPPLE_FLICK_THRESHOLD && !stickPastLeft) {
+    stickPastLeft = true;
+    const now = performance.now();
+    if (now - lastLeftPressTime < GRAPPLE_DOUBLE_TAP_WINDOW) attemptGrappleTurn(-1);
+    lastLeftPressTime = now;
+  } else if (touchStick.x > -GRAPPLE_FLICK_RESET) {
+    stickPastLeft = false;
+  }
+  if (touchStick.x > GRAPPLE_FLICK_THRESHOLD && !stickPastRight) {
+    stickPastRight = true;
+    const now = performance.now();
+    if (now - lastRightPressTime < GRAPPLE_DOUBLE_TAP_WINDOW) attemptGrappleTurn(1);
+    lastRightPressTime = now;
+  } else if (touchStick.x < GRAPPLE_FLICK_RESET) {
+    stickPastRight = false;
+  }
+}
+
+function updateJoystickFromEvent(e) {
+  const rect = joystickZone.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = e.clientX - cx;
+  const dy = e.clientY - cy;
+  const dist = Math.hypot(dx, dy);
+  const clampedDist = Math.min(dist, JOYSTICK_RADIUS);
+  const angle = Math.atan2(dy, dx);
+  const kx = Math.cos(angle) * clampedDist;
+  const ky = Math.sin(angle) * clampedDist;
+  joystickKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+  touchStick.x = kx / JOYSTICK_RADIUS;
+  touchStick.y = ky / JOYSTICK_RADIUS;
+  checkStickFlick();
+}
+function resetJoystick() {
+  touchStick.active = false;
+  touchStick.x = 0;
+  touchStick.y = 0;
+  stickPastLeft = false;
+  stickPastRight = false;
+  joystickKnob.style.transform = 'translate(0px, 0px)';
+  joystickZone.classList.remove('active');
+}
+resetJoystick();
+joystickZone.addEventListener('pointerdown', e => {
+  ensureAudio();
+  e.preventDefault();
+  joystickPointerId = e.pointerId;
+  touchStick.active = true;
+  joystickZone.classList.add('active');
+  joystickZone.setPointerCapture(e.pointerId);
+  updateJoystickFromEvent(e);
+});
+joystickZone.addEventListener('pointermove', e => {
+  if (!touchStick.active || e.pointerId !== joystickPointerId) return;
+  e.preventDefault();
+  updateJoystickFromEvent(e);
+});
+function endJoystick(e) {
+  if (e.pointerId !== joystickPointerId) return;
+  resetJoystick();
+  joystickPointerId = null;
+}
+joystickZone.addEventListener('pointerup', endJoystick);
+joystickZone.addEventListener('pointercancel', endJoystick);
+
+function bindNitroButton(id) {
+  const el = document.getElementById(id);
+  const trigger = e => { ensureAudio(); e.preventDefault(); triggerNitro(); };
+  el.addEventListener('touchstart', trigger);
+  el.addEventListener('mousedown', trigger);
+}
+bindNitroButton('btnNitro');
+
+const jturnBtn = document.getElementById('jturnBtn');
+const triggerJTurnButton = e => { ensureAudio(); e.preventDefault(); triggerJTurn(); };
+jturnBtn.addEventListener('touchstart', triggerJTurnButton);
+jturnBtn.addEventListener('mousedown', triggerJTurnButton);
+
+const rampBtn = document.getElementById('rampBtn');
+const triggerRampButton = e => { ensureAudio(); e.preventDefault(); spawnRamp(); };
+rampBtn.addEventListener('touchstart', triggerRampButton);
+rampBtn.addEventListener('mousedown', triggerRampButton);
+
+// Gamma slider (mobile only, but wired regardless) — drives a real SVG
+// gamma-correction filter applied to the canvas via CSS, not just a flat
+// brightness multiply. Standard display-gamma convention: output = input^(1/gamma).
+const gammaSlider = document.getElementById('gammaSlider');
+const gammaFuncs = [
+  document.getElementById('gammaR'),
+  document.getElementById('gammaG'),
+  document.getElementById('gammaB')
+];
+gammaSlider.addEventListener('input', () => {
+  const gamma = parseFloat(gammaSlider.value) || 1;
+  const exponent = 1 / gamma;
+  for (const f of gammaFuncs) f.setAttribute('exponent', exponent);
+});
+
+// ---------- COLLISION HELPERS ----------
+// Axis-aligned rect vs car approximated as circle for simple arcade collision
+function resolveBuildingCollisions(entity, radiusScale, snapToRoadCenter) {
+  const carRadius = Math.max(entity.width, entity.length) * (radiusScale || 0.42);
+  let collided = false;
+  for (const b of buildings) {
+    const closestX = Math.max(b.x, Math.min(entity.x, b.x + b.w));
+    const closestY = Math.max(b.y, Math.min(entity.y, b.y + b.h));
+    const dx = entity.x - closestX;
+    const dy = entity.y - closestY;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < carRadius * carRadius) {
+      collided = true;
+      const dist = Math.sqrt(distSq) || 0.01;
+      const overlap = carRadius - dist;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      entity.x += nx * overlap;
+      entity.y += ny * overlap;
+      // kill speed component into the wall (bounce a little), then scale the whole vector down
+      const dot = entity.vx * nx + entity.vy * ny;
+      entity.vx -= dot * nx * 1.4;
+      entity.vy -= dot * ny * 1.4;
+      entity.vx *= 0.55;
+      entity.vy *= 0.55;
+    }
+  }
+
+  // Bounce back toward the middle of the nearest road lane, rather than just
+  // resting wherever the overlap push-out left it — whichever road axis (the
+  // vertical or the horizontal grid line) is closer gets the recenter kick.
+  if (collided && snapToRoadCenter) {
+    const nearestVX = Math.round(entity.x / BLOCK) * BLOCK;
+    const nearestHY = Math.round(entity.y / BLOCK) * BLOCK;
+    const diffV = nearestVX - entity.x;
+    const diffH = nearestHY - entity.y;
+    const bounceStrength = 260;
+    const pullFactor = 0.35;
+    if (Math.abs(diffV) < Math.abs(diffH)) {
+      entity.x += diffV * pullFactor;
+      entity.vx += Math.sign(diffV) * bounceStrength;
+    } else {
+      entity.y += diffH * pullFactor;
+      entity.vy += Math.sign(diffH) * bounceStrength;
+    }
+  }
+
+  // world bounds — a last-resort safety net a bit past the perimeter island,
+  // not the primary boundary. The island's own collision (handled above,
+  // since it's in `buildings`) is what actually stops the player/police
+  // before this clamp would ever engage.
+  const pad = AVENUE_WIDTH / 2 + PERIMETER_ISLAND_WIDTH + 20;
+  entity.x = Math.max(-pad, Math.min(WORLD_W + pad, entity.x));
+  entity.y = Math.max(-pad, Math.min(WORLD_H + pad, entity.y));
+}
+
+// Checks whether any building is within `margin` of (x, y). Used by the
+// low-flying helicopter to detect an obstruction ahead and react — it
+// doesn't push anything, it just reports what's nearby.
+function nearestBuildingClearance(x, y, margin) {
+  let blocked = false;
+  let tallest = 0;
+  for (const b of buildings) {
+    const closestX = Math.max(b.x, Math.min(x, b.x + b.w));
+    const closestY = Math.max(b.y, Math.min(y, b.y + b.h));
+    const dist = Math.hypot(x - closestX, y - closestY);
+    if (dist < margin) {
+      blocked = true;
+      if (b.height > tallest) tallest = b.height;
+    }
+  }
+  return { blocked, tallest };
+}
+
+// ---------- 3D SCENE BUILD ----------
+// Ground
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x3a5a3a });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W + 2000, WORLD_H + 2000), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.set(WORLD_W / 2, 0, WORLD_H / 2);
+scene.add(ground);
+
+// Roads (flat strips laid over the ground) — avenues render wider than regular streets
+const roadMat = new THREE.MeshLambertMaterial({ color: 0x4a4a4a });
+for (let bx = 0; bx <= WORLD_W / BLOCK; bx++) {
+  const rx = bx * BLOCK;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(roadWidthAt(bx), WORLD_H + 200), roadMat);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.set(rx, 0.02, WORLD_H / 2);
+  scene.add(plane);
+}
+for (let by = 0; by <= WORLD_H / BLOCK; by++) {
+  const ry = by * BLOCK;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W + 200, roadWidthAt(by)), roadMat);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.set(WORLD_W / 2, 0.02, ry);
+  scene.add(plane);
+}
+
+// Lane dashes — instanced for performance. Regular streets get a single
+// center dash track; avenues get two tracks flanking the median instead.
+const dashLen = 24, gapLen = 22, dashPeriod = dashLen + gapLen;
+const dashMat = new THREE.MeshBasicMaterial({ color: 0xd8d84a });
+{
+  const vDummies = [];
+  for (let bx = 0; bx <= WORLD_W / BLOCK; bx++) {
+    const cx = bx * BLOCK;
+    const offsets = avenueIndices.has(bx) ? [-AVENUE_WIDTH / 4, AVENUE_WIDTH / 4] : [0];
+    for (const off of offsets) {
+      for (let y = 0; y < WORLD_H; y += dashPeriod) {
+        vDummies.push({ x: cx + off, z: y + dashLen / 2 });
+      }
+    }
+  }
+  const vDashGeo = new THREE.PlaneGeometry(4, dashLen);
+  const vDashMesh = new THREE.InstancedMesh(vDashGeo, dashMat, vDummies.length);
+  const dummy = new THREE.Object3D();
+  vDummies.forEach((d, i) => {
+    dummy.position.set(d.x, 0.04, d.z);
+    dummy.rotation.set(-Math.PI / 2, 0, 0);
+    dummy.updateMatrix();
+    vDashMesh.setMatrixAt(i, dummy.matrix);
+  });
+  scene.add(vDashMesh);
+
+  const hDummies = [];
+  for (let by = 0; by <= WORLD_H / BLOCK; by++) {
+    const cy = by * BLOCK;
+    const offsets = avenueIndices.has(by) ? [-AVENUE_WIDTH / 4, AVENUE_WIDTH / 4] : [0];
+    for (const off of offsets) {
+      for (let x = 0; x < WORLD_W; x += dashPeriod) {
+        hDummies.push({ x: x + dashLen / 2, z: cy + off });
+      }
+    }
+  }
+  const hDashGeo = new THREE.PlaneGeometry(dashLen, 4);
+  const hDashMesh = new THREE.InstancedMesh(hDashGeo, dashMat, hDummies.length);
+  hDummies.forEach((d, i) => {
+    dummy.position.set(d.x, 0.04, d.z);
+    dummy.rotation.set(-Math.PI / 2, 0, 0);
+    dummy.updateMatrix();
+    hDashMesh.setMatrixAt(i, dummy.matrix);
+  });
+  scene.add(hDashMesh);
+}
+
+// Buildings — real extruded 3D boxes. Each gets its own material instance so we
+// can independently fade its opacity when it's occluding the car from the camera.
+const buildingMeshes = [];
+for (const b of buildings) {
+  const mat = new THREE.MeshLambertMaterial({ color: b.color, transparent: true, opacity: 1 });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.height, b.h), mat);
+  mesh.position.set(b.x + b.w / 2, b.height / 2, b.y + b.h / 2);
+  mesh.userData.targetOpacity = 1;
+  scene.add(mesh);
+  buildingMeshes.push(mesh);
+}
+
+// Median islands — same extruded look and occlusion-fade participation as
+// buildings, but intentionally NOT added to the `buildings` collision array,
+// so cars drive straight through them instead of bouncing off.
+for (const m of medianRects) {
+  const mat = new THREE.MeshLambertMaterial({ color: m.color, transparent: true, opacity: 1 });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(m.w, m.height, m.h), mat);
+  mesh.position.set(m.x + m.w / 2, m.height / 2, m.y + m.h / 2);
+  mesh.userData.targetOpacity = 1;
+  scene.add(mesh);
+  buildingMeshes.push(mesh);
+}
+
+// Props — trees & bushes
+for (const p of props) {
+  if (p.type === 'tree') {
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(p.r * 0.22, p.r * 0.28, p.r * 1.6, 6),
+      new THREE.MeshLambertMaterial({ color: 0x5b3a24 })
+    );
+    trunk.position.set(p.x, p.r * 0.8, p.y);
+    scene.add(trunk);
+    const foliage = new THREE.Mesh(
+      new THREE.SphereGeometry(p.r * 1.4, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x2f6b2f })
+    );
+    foliage.position.set(p.x, p.r * 1.9, p.y);
+    scene.add(foliage);
+  } else {
+    const bush = new THREE.Mesh(
+      new THREE.SphereGeometry(p.r, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x4f8a4f })
+    );
+    bush.position.set(p.x, p.r * 0.7, p.y);
+    scene.add(bush);
+  }
+}
+
+// Street lights, fire hydrants & mailboxes — knockable street furniture.
+// Collision and the actual "knock it over" logic live in
+// updateKnockableProps(), called each frame from the game loop; this just
+// builds the visuals.
+const streetlightPoleMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+const streetlightLampMat = new THREE.MeshBasicMaterial({ color: 0xffdfa0 });
+const streetlightGlowTex = createGlowTexture(0xffdfa0);
+const hydrantBodyMat = new THREE.MeshLambertMaterial({ color: 0xb8262c });
+const hydrantCapMat = new THREE.MeshLambertMaterial({ color: 0x8a1a1e });
+const hydrantWaterMat = new THREE.MeshBasicMaterial({
+  color: 0xbfe0ff, transparent: true, opacity: 0.55,
+  blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+});
+const mailboxBodyMat = new THREE.MeshLambertMaterial({ color: 0x1a3d8f });
+const mailboxDoorMat = new THREE.MeshLambertMaterial({ color: 0x122c66 });
+for (const p of knockableProps) {
+  const group = new THREE.Group();
+  group.position.set(p.x, 0, p.y);
+  scene.add(group);
+  p.group = group;
+  p.toppled = false;
+  p.toppleProgress = 0;
+  p.fallAxis = 'z';
+  p.fallSign = 1;
+
+  if (p.type === 'streetlight') {
+    const poleHeight = 42;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.7, poleHeight, 8), streetlightPoleMat);
+    pole.position.set(0, poleHeight / 2, 0);
+    group.add(pole);
+
+    // Short arm reaching out over the sidewalk — classic cobra-head silhouette
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 10, 6), streetlightPoleMat);
+    arm.rotation.z = Math.PI / 2;
+    arm.position.set(4.5, poleHeight - 1, 0);
+    group.add(arm);
+
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(2.2, 8, 6), streetlightLampMat);
+    lamp.position.set(9, poleHeight - 1.5, 0);
+    group.add(lamp);
+
+    // Glow halo instead of a real light — reads as "lit" at dusk for free,
+    // without adding another dynamic light to the scene for every lamp.
+    const glow = makeGlowSprite(streetlightGlowTex, 22);
+    glow.position.set(9, poleHeight - 1.5, 0);
+    group.add(glow);
+  } else if (p.type === 'hydrant') {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 7, 10), hydrantBodyMat);
+    body.position.set(0, 3.5, 0);
+    group.add(body);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(2.3, 8, 6), hydrantCapMat);
+    cap.position.set(0, 7.3, 0);
+    group.add(cap);
+    const nozzleGeo = new THREE.CylinderGeometry(0.7, 0.7, 2.6, 6);
+    for (const side of [-1, 1]) {
+      const nozzle = new THREE.Mesh(nozzleGeo, hydrantCapMat);
+      nozzle.rotation.z = Math.PI / 2;
+      nozzle.position.set(0, 4.5, side * 2.6);
+      group.add(nozzle);
+    }
+
+    // Water spray — hidden until the hydrant actually gets knocked over
+    const water = new THREE.Mesh(new THREE.ConeGeometry(3, 14, 10, 1, true), hydrantWaterMat);
+    water.rotation.x = Math.PI; // narrow end down at the hydrant, flaring up and out
+    water.position.set(0, 9, 0);
+    water.visible = false;
+    group.add(water);
+    p.waterMesh = water;
+  } else {
+    // Blue USPS-style collection mailbox: a squat post + a rounded-top box body
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 4, 8), mailboxBodyMat);
+    post.position.set(0, 2, 0);
+    group.add(post);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(5, 6.5, 4.4), mailboxBodyMat);
+    box.position.set(0, 7.5, 0);
+    group.add(box);
+    const dome = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 5, 12, 1, false, 0, Math.PI), mailboxBodyMat);
+    dome.rotation.z = Math.PI / 2;
+    dome.position.set(0, 10.75, 0);
+    group.add(dome);
+    const doorSlot = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.4, 3.4), mailboxDoorMat);
+    doorSlot.position.set(2.55, 7.5, 0);
+    group.add(doorSlot);
+  }
+}
+
+// Car — styled after a 1965 Ford Mustang fastback: long hood, short deck, sloped
+// fastback roofline, chrome trim, round headlights — grouped so we can move/rotate as one unit.
+const carGroup = new THREE.Group();
+
+// All the primitive body panels (chassis, bumpers, hood, roof, glass, wheels,
+// etc.) live in their own sub-group so they can be hidden in one shot if a
+// real .glb model loads successfully. Headlight/taillight rigs (spotlights,
+// glow sprites, point lights) stay directly on carGroup since they're
+// functional, not cosmetic, and should keep working either way.
+const carBodyGroup = new THREE.Group();
+carGroup.add(carBodyGroup);
+
+// Main chassis
+const bodyMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(54.5, 15, 34),
+  new THREE.MeshLambertMaterial({ color: car.color })
+);
+bodyMesh.position.set(0, 10, 0);
+carBodyGroup.add(bodyMesh);
+
+// Bumpers
+const chromeMat = new THREE.MeshLambertMaterial({ color: 0xcfcfcf });
+const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 36), chromeMat);
+frontBumper.position.set(28, 6, 0);
+carBodyGroup.add(frontBumper);
+const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 36), chromeMat);
+rearBumper.position.set(-28, 6, 0);
+carBodyGroup.add(rearBumper);
+
+// Grille
+const grilleMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(2, 8, 26),
+  new THREE.MeshLambertMaterial({ color: 0x161616 })
+);
+grilleMesh.position.set(26.5, 12.5, 0);
+carBodyGroup.add(grilleMesh);
+
+// Hood
+const hoodMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(31.5, 3.5, 28),
+  new THREE.MeshLambertMaterial({ color: car.color })
+);
+hoodMesh.position.set(8, 17, 0);
+carBodyGroup.add(hoodMesh);
+
+// Hood scoop
+const scoopMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(8.5, 4, 11.333),
+  new THREE.MeshLambertMaterial({ color: 0x1a1a1a })
+);
+scoopMesh.position.set(19, 19.5, 0);
+carBodyGroup.add(scoopMesh);
+
+// Fastback roof
+const roofMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(21.5, 2, 25),
+  new THREE.MeshLambertMaterial({ color: 0x1f1f24 })
+);
+roofMesh.position.set(-2.5, 25, 0);
+roofMesh.rotation.z = 0.01;
+carBodyGroup.add(roofMesh);
+
+// Glass
+const glassMat = new THREE.MeshLambertMaterial({ color: 0x9fd3e8, transparent: true, opacity: 0.75 });
+
+const windshieldMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(7.56, 17.5, 24),
+  glassMat
+);
+windshieldMesh.position.set(9, 16.5, 0);
+windshieldMesh.rotation.z = 0.62;
+carBodyGroup.add(windshieldMesh);
+
+const rearWindowMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(8.64, 17, 22),
+  glassMat
+);
+rearWindowMesh.position.set(-12.96, 15.5, 0);
+rearWindowMesh.rotation.z = -0.55;
+carBodyGroup.add(rearWindowMesh);
+
+const sideWindowGeo = new THREE.BoxGeometry(16.2, 6, 1.2);
+for (const side of [-1, 1]) {
+  const sideWindow = new THREE.Mesh(sideWindowGeo, glassMat);
+  sideWindow.position.set(-2.5, 20.5, side * 9);
+  carBodyGroup.add(sideWindow);
+}
+
+// Side exhaust pipes
+const exhaustMat = new THREE.MeshLambertMaterial({ color: 0xb8b8b8 });
+const exhaustGeo = new THREE.CylinderGeometry(1.7, 1.7, 20.5, 8);
+for (const side of [-1, 1]) {
+  for (const yOffset of [4.5, 9]) {
+    const pipe = new THREE.Mesh(exhaustGeo, exhaustMat);
+    pipe.rotation.z = Math.PI / 2;
+    pipe.position.set(-4.32, yOffset, side * 19.5);
+    carBodyGroup.add(pipe);
+  }
+}
+
+// Wheels
+const wheelRadius = 9;
+const wheelThickness = 9;
+const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 12);
+const wheelMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+const hubMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+const hubGeo = new THREE.CylinderGeometry(0.4 * wheelRadius, 0.4 * wheelRadius, wheelThickness + 1, 8);
+const wheelOffsets = [
+  [17, -17], [17, 17],
+  [-17, -17], [-17, 17]
+];
+for (const [wx, wz] of wheelOffsets) {
+  const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+  wheel.rotation.x = Math.PI / 2;
+  wheel.position.set(wx, 8, wz);
+  carBodyGroup.add(wheel);
+  const hub = new THREE.Mesh(hubGeo, hubMat);
+  hub.rotation.x = Math.PI / 2;
+  hub.position.set(wx, 8, wz);
+  carBodyGroup.add(hub);
+}
+
+// Lights — round headlights (Mustang style) with a real forward spotlight,
+// a translucent beam cone, and a glow halo so they read as "on" even in
+// bright daylight; tri-bar taillights that glow via a halo + point light,
+// and brighten further under braking/reverse (updated each frame in update()).
+function createGlowTexture(hexColor) {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const c = new THREE.Color(hexColor);
+  const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255);
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0.95)`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},0.4)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+function makeGlowSprite(texture, size) {
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(size, size, 1);
+  return sprite;
+}
+const headlightGlowTex = createGlowTexture(0xfff2b0);
+const taillightGlowTex = createGlowTexture(0xff2020);
+
+const headlightMat = new THREE.MeshBasicMaterial({ color: 0xfffbe6 });
+const headlightGeo = new THREE.CylinderGeometry(2.6, 2.6, 3, 12);
+for (const hz of [-car.width / 2 + 6, car.width / 2 - 6]) {
+  const light = new THREE.Mesh(headlightGeo, headlightMat);
+  light.rotation.z = Math.PI / 2;
+  light.position.set(car.length / 2 + 0.5, 11, hz);
+  carGroup.add(light);
+
+  // Soft glow halo so the lens reads as lit even against a bright sky —
+  // sized up for a brighter-looking lens.
+  const glow = makeGlowSprite(headlightGlowTex, 24);
+  glow.position.set(car.length / 2 + 1, 11, hz);
+  carGroup.add(glow);
+
+  // Real forward-facing spotlight, aimed down the road ahead of the nose —
+  // brighter and reaching twice as far as before.
+  const spot = new THREE.SpotLight(0xfff2c0, 2.4, 520, 0.32, 0.6, 1.2);
+  spot.position.set(car.length / 2 + 0.5, 11, hz);
+  const spotTarget = new THREE.Object3D();
+  spotTarget.position.set(car.length / 2 + 400, 0, hz * 0.4);
+  carGroup.add(spotTarget);
+  spot.target = spotTarget;
+  carGroup.add(spot);
+
+  // Translucent beam cone — a stylized visible headlight beam, apex at the
+  // lens widening forward. Doubled in length (and brightened) to match the
+  // spotlight's extended reach, so it reads clearly even in full daylight.
+  const beamLength = 110;
+  const beamGeo = new THREE.ConeGeometry(12, beamLength, 16, 1, false);
+  beamGeo.translate(0, -beamLength / 2, 0); // apex -> local origin (the lens)
+  beamGeo.rotateZ(Math.PI / 2);             // apex stays put, base swings out to +X (forward)
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0xfff2b0, transparent: true, opacity: 0.14,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  });
+  const beam = new THREE.Mesh(beamGeo, beamMat);
+  beam.position.set(car.length / 2 + 0.5, 11, hz);
+  carGroup.add(beam);
+}
+
+const taillightIdleColor = new THREE.Color(0x661414);
+const taillightBrakeColor = new THREE.Color(0xff2222);
+const taillightMat = new THREE.MeshBasicMaterial({ color: taillightIdleColor.clone() });
+const taillightGlowSprites = [];
+const taillightPointLights = [];
+// Mounted further back than before (level with the rear bumper) — they used
+// to sit flush with the body's rear face and z-fight/clip against it.
+const taillightMountX = -car.length / 2 - 2;
+for (const hz of [-car.width / 2 + 4, car.width / 2 - 4]) {
+  // three narrow bars per side = classic Mustang tri-bar taillight
+  for (const barOffset of [-3, 0, 3]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(2, 3.5, 1.6), taillightMat);
+    bar.position.set(taillightMountX, 10, hz + barOffset);
+    carGroup.add(bar);
+  }
+
+  // Bigger, brighter glow — sized and lit up more than before.
+  const glow = makeGlowSprite(taillightGlowTex, 16);
+  glow.position.set(taillightMountX, 10, hz);
+  carGroup.add(glow);
+  taillightGlowSprites.push(glow);
+
+  const tlLight = new THREE.PointLight(0xff2020, 0.8, 55, 1);
+  tlLight.position.set(taillightMountX, 10, hz);
+  carGroup.add(tlLight);
+  taillightPointLights.push(tlLight);
+}
+scene.add(carGroup);
+
+// ---- Swap in a real 3D model for the player car, if one's been dropped in ----
+// Adjust CAR_MODEL config below to match whatever .glb you're using:
+//  - scale: most free packs are modeled in meters at real-world car size
+//    (~4.5m long). Our world units are ~1 unit = 1 inch-ish (car.length=54),
+//    so scale will likely need to land somewhere around 12-14 to fit — tweak
+//    it and reload until the model's proportions match the old box car.
+//  - rotationY: GLTF cars are usually modeled facing -Z or +Z. Our car code
+//    treats +X as "forward" (nose direction), so this rotates the import to
+//    match. Try 0, Math.PI/2, Math.PI, or -Math.PI/2 until the nose points
+//    down +X (matching where the headlights/spotlights are mounted, above).
+//  - yOffset: nudges the model up/down so wheels sit on the ground plane.
+const CAR_MODEL = {
+  enabled: false, // flip back to true when you want to test the .glb model again
+  path: 'models/car.glb',
+  scale: 13,
+  rotationY: Math.PI / 2,
+  yOffset: 0
+};
+let carModelRoot = null;
+if (CAR_MODEL.enabled) {
+  loadGLTFModel(CAR_MODEL.path, (gltf) => {
+    carModelRoot = prepImportedModel(gltf.scene);
+    carModelRoot.scale.setScalar(CAR_MODEL.scale);
+    carModelRoot.rotation.y = CAR_MODEL.rotationY;
+    carModelRoot.position.y = CAR_MODEL.yOffset;
+    carGroup.add(carModelRoot);
+    carBodyGroup.visible = false; // hide the primitive box car now that the model's in
+  }, () => {
+    // onFail: carBodyGroup (primitive car) just stays visible — no action needed.
+  });
+}
+
+// Generic taillight brightening — takes a material, a list of glow sprites,
+// and a list of point lights, and blends them from idle to full "brake"
+// glow. Used by both the player's taillights and every police car's.
+function applyTaillightGlow(mat, glowSprites, pointLights, brakeMag) {
+  mat.color.copy(taillightIdleColor).lerp(taillightBrakeColor, brakeMag);
+  const scale = 16 + brakeMag * 11;
+  for (const s of glowSprites) {
+    s.scale.set(scale, scale, 1);
+    s.material.opacity = 0.7 + brakeMag * 0.3;
+  }
+  for (const pl of pointLights) {
+    pl.intensity = 0.8 + brakeMag * 2.6;
+  }
+}
+// Called each frame from update() with 0 (idle glow) .. 1 (full brake/reverse)
+// so the taillights visibly brighten instead of staying a flat, static red.
+function setTaillightGlow(brakeMag) {
+  applyTaillightGlow(taillightMat, taillightGlowSprites, taillightPointLights, brakeMag);
+}
+setTaillightGlow(0);
+
+// ---------- POLICE CARS ----------
+// AI-driven vehicles: each patrols the city on the road grid independently and
+// gives chase once it spots the player.
+const POLICE_LENGTH = 56, POLICE_WIDTH = 34;
+
+// Shared geometries/materials — reused across every police car instance
+const policeBodyMat = new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }); // white
+const policeAccentMat = new THREE.MeshLambertMaterial({ color: 0x141414 }); // black
+const policeChromeMat = new THREE.MeshLambertMaterial({ color: 0xd8d8d8 });
+const policeCabinMat = new THREE.MeshLambertMaterial({ color: 0x2b2f33 });
+const policeHeadlightGeo = new THREE.CylinderGeometry(2.4, 2.4, 3, 12);
+const policeHeadlightMat = new THREE.MeshBasicMaterial({ color: 0xfff7c2 });
+const policeWheelRadius = 9;
+const policeWheelGeo = new THREE.CylinderGeometry(policeWheelRadius, policeWheelRadius, 8, 12);
+const policeWheelMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+const policeSidewallGeo = new THREE.CylinderGeometry(policeWheelRadius * 0.72, policeWheelRadius * 0.72, 8.4, 12);
+const policeSidewallMat = new THREE.MeshLambertMaterial({ color: 0xe8e8e8 });
+const lightBarBaseMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+const redOn = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+const redOff = new THREE.MeshBasicMaterial({ color: 0x551111 });
+const blueOn = new THREE.MeshBasicMaterial({ color: 0x3355ff });
+const blueOff = new THREE.MeshBasicMaterial({ color: 0x15204a });
+const policeRedGlowTex = createGlowTexture(0xff2222);
+const policeBlueGlowTex = createGlowTexture(0x3355ff);
+
+function buildPoliceCar(route) {
+  const state = {
+    x: route[0].x,
+    y: route[0].y,
+    angle: 0,
+    vx: 0,
+    vy: 0,
+    speed: 0,
+    width: POLICE_WIDTH,
+    length: POLICE_LENGTH,
+    mode: 'patrol',            // 'patrol' | 'chase'
+    route: route,               // unique circuit of waypoints this car loops through while patrolling
+    routeIndex: 0,
+    patrolSpeed: 240,
+    chaseSpeed: 540,            // a little slower than the player's top speed, so it's escapable
+    turnRate: 3.4,
+    detectRadius: 480,
+    loseRadius: 750,
+    pauseTimer: 0,               // frozen for a moment after bouncing off the player
+    stuckTimer: 0,
+    medianLeafTimer: 0            // cooldown between leaf-particle bursts while crossing a median
+  };
+
+  // 1955-style cruiser: boxy body, tall greenhouse, chrome bumpers/trim,
+  // black-over-white two-tone paint, rooftop light bar.
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH, 17, POLICE_WIDTH), policeBodyMat);
+  body.position.set(0, 11, 0);
+  group.add(body);
+
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH * 0.32, 5, POLICE_WIDTH - 4), policeAccentMat);
+  hood.position.set(POLICE_LENGTH * 0.28, 19.5, 0);
+  group.add(hood);
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH * 0.22, 4, POLICE_WIDTH - 4), policeAccentMat);
+  trunk.position.set(-POLICE_LENGTH * 0.32, 19, 0);
+  group.add(trunk);
+
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH * 0.4, 11, POLICE_WIDTH - 8), policeCabinMat);
+  cabin.position.set(-POLICE_LENGTH * 0.02, 24, 0);
+  group.add(cabin);
+
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(5, 7, POLICE_WIDTH + 2), policeChromeMat);
+  frontBumper.position.set(POLICE_LENGTH / 2 + 1, 7, 0);
+  group.add(frontBumper);
+  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(5, 7, POLICE_WIDTH + 2), policeChromeMat);
+  rearBumper.position.set(-POLICE_LENGTH / 2 - 1, 7, 0);
+  group.add(rearBumper);
+
+  for (const hz of [-POLICE_WIDTH / 2 + 6, POLICE_WIDTH / 2 - 6]) {
+    const light = new THREE.Mesh(policeHeadlightGeo, policeHeadlightMat);
+    light.rotation.z = Math.PI / 2;
+    light.position.set(POLICE_LENGTH / 2 + 0.5, 10.5, hz);
+    group.add(light);
+
+    const glow = makeGlowSprite(headlightGlowTex, 20);
+    glow.position.set(POLICE_LENGTH / 2 + 1, 10.5, hz);
+    group.add(glow);
+
+    const spot = new THREE.SpotLight(0xfff2c0, 2.0, 480, 0.32, 0.6, 1.2);
+    spot.position.set(POLICE_LENGTH / 2 + 0.5, 10.5, hz);
+    const spotTarget = new THREE.Object3D();
+    spotTarget.position.set(POLICE_LENGTH / 2 + 380, 0, hz * 0.4);
+    group.add(spotTarget);
+    spot.target = spotTarget;
+    group.add(spot);
+
+    const beamLength = 100;
+    const beamGeo = new THREE.ConeGeometry(11, beamLength, 16, 1, false);
+    beamGeo.translate(0, -beamLength / 2, 0);
+    beamGeo.rotateZ(Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xfff2b0, transparent: true, opacity: 0.13,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(POLICE_LENGTH / 2 + 0.5, 10.5, hz);
+    group.add(beam);
+  }
+
+  // Tri-bar taillights, mounted clear of the rear bumper the same way the
+  // Mustang's are, so they don't z-fight with the body. Brighten to a full
+  // "brake" glow whenever this car is in its post-collision freeze
+  // (pauseTimer > 0) — updated each frame in the game loop.
+  const policeTaillightMountX = -POLICE_LENGTH / 2 - 2;
+  const policeTaillightMat = new THREE.MeshBasicMaterial({ color: taillightIdleColor.clone() });
+  const taillightGlows = [];
+  const taillightLights = [];
+  for (const hz of [-POLICE_WIDTH / 2 + 4, POLICE_WIDTH / 2 - 4]) {
+    for (const barOffset of [-2.5, 2.5]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 1.4), policeTaillightMat);
+      bar.position.set(policeTaillightMountX, 9.5, hz + barOffset);
+      group.add(bar);
+    }
+    const tGlow = makeGlowSprite(taillightGlowTex, 14);
+    tGlow.position.set(policeTaillightMountX, 9.5, hz);
+    group.add(tGlow);
+    taillightGlows.push(tGlow);
+
+    const tLight = new THREE.PointLight(0xff2020, 0.7, 50, 1);
+    tLight.position.set(policeTaillightMountX, 9.5, hz);
+    group.add(tLight);
+    taillightLights.push(tLight);
+  }
+
+  const wheelOffsets = [
+    [POLICE_LENGTH / 2 - 11, -POLICE_WIDTH / 2], [POLICE_LENGTH / 2 - 11, POLICE_WIDTH / 2],
+    [-POLICE_LENGTH / 2 + 11, -POLICE_WIDTH / 2], [-POLICE_LENGTH / 2 + 11, POLICE_WIDTH / 2]
+  ];
+  for (const [wx, wz] of wheelOffsets) {
+    const wheel = new THREE.Mesh(policeWheelGeo, policeWheelMat);
+    wheel.rotation.x = Math.PI / 2;
+    wheel.position.set(wx, policeWheelRadius - 1, wz);
+    group.add(wheel);
+    const sidewall = new THREE.Mesh(policeSidewallGeo, policeSidewallMat);
+    sidewall.rotation.x = Math.PI / 2;
+    sidewall.position.set(wx, policeWheelRadius - 1, wz);
+    group.add(sidewall);
+  }
+
+  const lightBarBase = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH * 0.22, 3.5, POLICE_WIDTH - 10), lightBarBaseMat);
+  lightBarBase.position.set(0, 30.5, 0);
+  group.add(lightBarBase);
+
+  const redLight = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH * 0.1, 2.5, POLICE_WIDTH * 0.32), redOff);
+  redLight.position.set(0, 32.5, -POLICE_WIDTH * 0.22);
+  group.add(redLight);
+  const blueLight = new THREE.Mesh(new THREE.BoxGeometry(POLICE_LENGTH * 0.1, 2.5, POLICE_WIDTH * 0.32), blueOff);
+  blueLight.position.set(0, 32.5, POLICE_WIDTH * 0.22);
+  group.add(blueLight);
+
+  // Glow halos for the roof lights — only visible while flashing (chase mode),
+  // toggled in sync with the light-bar material swap in the game loop.
+  const redGlow = makeGlowSprite(policeRedGlowTex, 18);
+  redGlow.position.copy(redLight.position);
+  redGlow.visible = false;
+  group.add(redGlow);
+  const blueGlow = makeGlowSprite(policeBlueGlowTex, 18);
+  blueGlow.position.copy(blueLight.position);
+  blueGlow.visible = false;
+  group.add(blueGlow);
+
+  scene.add(group);
+  return {
+    state, group, redLight, blueLight, redGlow, blueGlow,
+    taillightMat: policeTaillightMat, taillightGlows, taillightLights
+  };
+}
+
+// Each car gets its own fixed rectangular circuit to loop while patrolling —
+// distinct shapes/sizes/locations so their routes don't overlap.
+const CX = WORLD_W / 2, CY = WORLD_H / 2;
+const policeRoutes = [
+  // Car 1: small square loop, northeast of center
+  [
+    { x: CX + BLOCK,     y: CY + BLOCK },
+    { x: CX + 2 * BLOCK, y: CY + BLOCK },
+    { x: CX + 2 * BLOCK, y: CY + 2 * BLOCK },
+    { x: CX + BLOCK,     y: CY + 2 * BLOCK }
+  ],
+  // Car 2: tall narrow loop, west of center
+  [
+    { x: CX - 2 * BLOCK, y: CY - BLOCK },
+    { x: CX - BLOCK,     y: CY - BLOCK },
+    { x: CX - BLOCK,     y: CY + 2 * BLOCK },
+    { x: CX - 2 * BLOCK, y: CY + 2 * BLOCK }
+  ],
+  // Car 3: long thin loop, south of center
+  [
+    { x: CX - 2 * BLOCK, y: CY - 2 * BLOCK },
+    { x: CX + 2 * BLOCK, y: CY - 2 * BLOCK },
+    { x: CX + 2 * BLOCK, y: CY - BLOCK },
+    { x: CX - 2 * BLOCK, y: CY - BLOCK }
+  ]
+];
+
+const policeCars = policeRoutes.map(route => buildPoliceCar(route));
+
+// ---------- ARMORED TRUCKS ----------
+// Four heavy cash-transport trucks, each patrolling its own one-block square
+// route (4 sides = "four block route") in a different quadrant of the city.
+// Hitting one knocks cash out of its gauge and into the player's running
+// total, with a burst of flying bills — like a rolling piggy bank.
+const ARMORED_LENGTH = 54, ARMORED_WIDTH = 32;
+const armoredBodyMat = new THREE.MeshLambertMaterial({ color: 0x3c4238 });   // dark olive-gunmetal armor plate
+const armoredPanelMat = new THREE.MeshLambertMaterial({ color: 0x2a2e27 }); // darker recessed panels/seams
+const armoredTrimMat = new THREE.MeshLambertMaterial({ color: 0xb8a23a }); // brass/gold trim — "cash transport" livery
+const armoredGlassMat = new THREE.MeshLambertMaterial({ color: 0x14161a }); // near-black armored slit windows
+const armoredBumperMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+const armoredHeadlightMat = new THREE.MeshBasicMaterial({ color: 0xfffbe6 });
+const armoredTaillightMat = new THREE.MeshBasicMaterial({ color: 0xcc2020 });
+const armoredWheelGeo = new THREE.CylinderGeometry(9, 9, 9, 12);
+const armoredWheelMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+
+const ARMORED_TOP_SPEED = car.maxSpeed * 0.65; // 65% of the Mustang's top speed
+const ARMORED_MAX_CASH = 500;
+const ARMORED_CASH_PER_HIT = 100;
+const ARMORED_HIT_COOLDOWN = 0.5; // seconds between cash-extracting hits, so holding contact doesn't drain it instantly
+const ARMORED_RESPAWN_DELAY = 5; // seconds a depleted truck stays gone before a fresh one takes its place
+
+// One 1-block square route per truck, each in a different quadrant.
+const armoredRoutes = [
+  // Truck 1 — northeast quadrant
+  [
+    { x: CX + BLOCK,     y: CY + BLOCK },
+    { x: CX + 2 * BLOCK, y: CY + BLOCK },
+    { x: CX + 2 * BLOCK, y: CY + 2 * BLOCK },
+    { x: CX + BLOCK,     y: CY + 2 * BLOCK }
+  ],
+  // Truck 2 — northwest quadrant
+  [
+    { x: CX - 2 * BLOCK, y: CY + BLOCK },
+    { x: CX - BLOCK,     y: CY + BLOCK },
+    { x: CX - BLOCK,     y: CY + 2 * BLOCK },
+    { x: CX - 2 * BLOCK, y: CY + 2 * BLOCK }
+  ],
+  // Truck 3 — southeast quadrant
+  [
+    { x: CX + BLOCK,     y: CY - 2 * BLOCK },
+    { x: CX + 2 * BLOCK, y: CY - 2 * BLOCK },
+    { x: CX + 2 * BLOCK, y: CY - BLOCK },
+    { x: CX + BLOCK,     y: CY - BLOCK }
+  ],
+  // Truck 4 — southwest quadrant
+  [
+    { x: CX - 2 * BLOCK, y: CY - 2 * BLOCK },
+    { x: CX - BLOCK,     y: CY - 2 * BLOCK },
+    { x: CX - BLOCK,     y: CY - BLOCK },
+    { x: CX - 2 * BLOCK, y: CY - BLOCK }
+  ]
+];
+
+function buildArmoredTruck(route) {
+  const state = {
+    x: route[0].x, y: route[0].y, angle: 0, vx: 0, vy: 0, speed: 0,
+    width: ARMORED_WIDTH, length: ARMORED_LENGTH,
+    route, routeIndex: 1, // start heading toward the 2nd waypoint since we spawn on the 1st
+    // turnRate is set so turning radius (~patrolSpeed/turnRate) stays inside
+    // the road's half-width — otherwise a fast, slow-turning truck cuts every
+    // corner wide and clips straight into the building on the inside of the turn.
+    patrolSpeed: ARMORED_TOP_SPEED, turnRate: ARMORED_TOP_SPEED / 65, stuckTimer: 0,
+    cash: ARMORED_MAX_CASH, maxCash: ARMORED_MAX_CASH, hitCooldown: 0,
+    alive: true, respawnTimer: 0
+  };
+
+  // Boxy, heavy-plated silhouette — flat slab panels, no glass beyond narrow
+  // armored slits, brass trim as the one bit of "cash transport" flourish.
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(ARMORED_LENGTH, 27, ARMORED_WIDTH), armoredBodyMat);
+  body.position.set(0, 16.5, 0);
+  group.add(body);
+
+  // Recessed panel seams — a couple of darker inset bands to read as heavy
+  // plating rather than a smooth van body.
+  for (const px of [-ARMORED_LENGTH * 0.18, ARMORED_LENGTH * 0.12]) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(4, 22, ARMORED_WIDTH + 0.4), armoredPanelMat);
+    panel.position.set(px, 16.5, 0);
+    group.add(panel);
+  }
+
+  // Brass trim stripe — the one bit of livery flourish, marking it as a
+  // cash-transport vehicle rather than a generic armored van.
+  const trimStripe = new THREE.Mesh(new THREE.BoxGeometry(ARMORED_LENGTH + 0.2, 2.2, ARMORED_WIDTH + 0.2), armoredTrimMat);
+  trimStripe.position.set(0, 9, 0);
+  group.add(trimStripe);
+
+  // Narrow armored windshield slit — much smaller than a normal windshield
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(2, 6, ARMORED_WIDTH - 10), armoredGlassMat);
+  windshield.position.set(ARMORED_LENGTH / 2 - 1, 24, 0);
+  group.add(windshield);
+  const sideGlassGeo = new THREE.BoxGeometry(ARMORED_LENGTH * 0.22, 5, 1.2);
+  for (const side of [-1, 1]) {
+    const sideGlass = new THREE.Mesh(sideGlassGeo, armoredGlassMat);
+    sideGlass.position.set(ARMORED_LENGTH * 0.2, 23, side * (ARMORED_WIDTH / 2 - 0.6));
+    group.add(sideGlass);
+  }
+
+  // Rear cargo hatch — a slab door with reinforcing ribs across the back
+  const hatch = new THREE.Mesh(new THREE.BoxGeometry(2, 22, ARMORED_WIDTH - 4), armoredPanelMat);
+  hatch.position.set(-ARMORED_LENGTH / 2 + 1, 16.5, 0);
+  group.add(hatch);
+  const ribGeo = new THREE.BoxGeometry(1, 22, 1.4);
+  for (const rz of [-ARMORED_WIDTH * 0.28, 0, ARMORED_WIDTH * 0.28]) {
+    const rib = new THREE.Mesh(ribGeo, armoredTrimMat);
+    rib.position.set(-ARMORED_LENGTH / 2 + 2.2, 16.5, rz);
+    group.add(rib);
+  }
+
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(4, 7, ARMORED_WIDTH + 1), armoredBumperMat);
+  frontBumper.position.set(ARMORED_LENGTH / 2 + 1.5, 6, 0);
+  group.add(frontBumper);
+  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(4, 7, ARMORED_WIDTH + 1), armoredBumperMat);
+  rearBumper.position.set(-ARMORED_LENGTH / 2 - 1.5, 6, 0);
+  group.add(rearBumper);
+
+  for (const hz of [-ARMORED_WIDTH / 2 + 5, ARMORED_WIDTH / 2 - 5]) {
+    const headlight = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 2, 10), armoredHeadlightMat);
+    headlight.rotation.z = Math.PI / 2;
+    headlight.position.set(ARMORED_LENGTH / 2 + 0.5, 8, hz);
+    group.add(headlight);
+    const hGlow = makeGlowSprite(headlightGlowTex, 14);
+    hGlow.position.set(ARMORED_LENGTH / 2 + 1, 8, hz);
+    group.add(hGlow);
+  }
+  for (const hz of [-ARMORED_WIDTH / 2 + 5, ARMORED_WIDTH / 2 - 5]) {
+    const taillight = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3, 3), armoredTaillightMat);
+    taillight.position.set(-ARMORED_LENGTH / 2 - 2, 9, hz);
+    group.add(taillight);
+    const tGlow = makeGlowSprite(taillightGlowTex, 11);
+    tGlow.position.set(-ARMORED_LENGTH / 2 - 2, 9, hz);
+    tGlow.material.opacity = 0.75;
+    group.add(tGlow);
+  }
+
+  const wheelOffsets = [
+    [ARMORED_LENGTH / 2 - 11, -ARMORED_WIDTH / 2], [ARMORED_LENGTH / 2 - 11, ARMORED_WIDTH / 2],
+    [-ARMORED_LENGTH / 2 + 11, -ARMORED_WIDTH / 2], [-ARMORED_LENGTH / 2 + 11, ARMORED_WIDTH / 2]
+  ];
+  for (const [wx, wz] of wheelOffsets) {
+    const wheel = new THREE.Mesh(armoredWheelGeo, armoredWheelMat);
+    wheel.rotation.x = Math.PI / 2;
+    wheel.position.set(wx, 8, wz);
+    group.add(wheel);
+  }
+
+  // Floating cash gauge — a dark backing bar plus a green (fading to amber
+  // as it empties) fill bar, both billboard sprites so they always face the
+  // camera regardless of the truck's heading.
+  const gaugeBackMat = new THREE.SpriteMaterial({ color: 0x111111, transparent: true, opacity: 0.75, depthTest: false });
+  const gaugeBack = new THREE.Sprite(gaugeBackMat);
+  gaugeBack.scale.set(46, 10, 1);
+  gaugeBack.position.set(0, 52, 0);
+  gaugeBack.renderOrder = 10;
+  group.add(gaugeBack);
+
+  const gaugeFillMat = new THREE.SpriteMaterial({ color: 0x3ddc63, transparent: true, opacity: 0.95, depthTest: false });
+  const gaugeFill = new THREE.Sprite(gaugeFillMat);
+  gaugeFill.scale.set(42, 7, 1);
+  gaugeFill.position.set(0, 52, 0.1);
+  gaugeFill.renderOrder = 11;
+  group.add(gaugeFill);
+
+  scene.add(group);
+  return { state, group, gaugeFill, gaugeFillMat };
+}
+const armoredTrucks = armoredRoutes.map(route => buildArmoredTruck(route));
+
+const gaugeFullColor = new THREE.Color(0x3ddc63);
+const gaugeEmptyColor = new THREE.Color(0xdc5a2a);
+
+// Resets a depleted truck back to full and sends it out again from its
+// route's starting point — effectively a fresh truck taking over the beat.
+function respawnArmoredTruck(t) {
+  const s = t.state;
+  const spawn = s.route[0];
+  s.x = spawn.x;
+  s.y = spawn.y;
+  s.angle = 0;
+  s.vx = 0;
+  s.vy = 0;
+  s.speed = 0;
+  s.routeIndex = 1;
+  s.stuckTimer = 0;
+  s.hitCooldown = 0;
+  s.cash = s.maxCash;
+  s.alive = true;
+  t.group.position.set(s.x, 0, s.y);
+  t.group.rotation.set(0, 0, 0);
+  t.group.visible = true;
+  t.gaugeFill.scale.x = 42;
+  t.gaugeFillMat.color.copy(gaugeFullColor);
+}
+
+// Simple waypoint patrol, no chase/detection behavior — just loops its own
+// square forever. Mirrors the patrol half of updateAllPolice(). Also ticks
+// down each truck's hit cooldown, keeps its floating cash gauge in sync, and
+// handles the despawn/respawn cycle once a truck's been drained of cash.
+function updateArmoredTrucks(dt) {
+  for (const t of armoredTrucks) {
+    const s = t.state;
+
+    if (!s.alive) {
+      s.respawnTimer -= dt;
+      if (s.respawnTimer <= 0) respawnArmoredTruck(t);
+      continue; // no patrol/physics/gauge updates while it's gone
+    }
+
+    if (s.hitCooldown > 0) s.hitCooldown = Math.max(0, s.hitCooldown - dt);
+
+    const wp = s.route[s.routeIndex];
+    const wdx = wp.x - s.x, wdy = wp.y - s.y;
+    // Anticipate the turn earlier the faster the truck is going — a fixed
+    // switch distance was fine for a slow van, but at 400+ units/sec it left
+    // no room to actually complete the turn before reaching the corner.
+    const waypointSwitchDist = Math.max(50, s.patrolSpeed * 0.35);
+    if (Math.hypot(wdx, wdy) < waypointSwitchDist) {
+      s.routeIndex = (s.routeIndex + 1) % s.route.length;
+    }
+    const targetAngle = Math.atan2(wdy, wdx);
+    const diff = shortestAngleDiff(s.angle, targetAngle);
+    const maxStep = s.turnRate * dt;
+    if (Math.abs(diff) <= maxStep) s.angle = targetAngle;
+    else s.angle += Math.sign(diff) * maxStep;
+
+    // Slow through corners — the sharper the turn still ahead of it, the less
+    // speed it's allowed to carry, so a tight 90° at an intersection doesn't
+    // balloon out into the building on the inside of the curve.
+    const turnSeverity = Math.min(1, Math.abs(diff) / (Math.PI / 2));
+    const corneringSpeed = s.patrolSpeed * (1 - turnSeverity * 0.6);
+
+    s.vx += Math.cos(s.angle) * 260 * dt;
+    s.vy += Math.sin(s.angle) * 260 * dt;
+    let spd = Math.hypot(s.vx, s.vy);
+    if (spd > corneringSpeed) {
+      const scale = corneringSpeed / spd;
+      s.vx *= scale; s.vy *= scale;
+      spd = corneringSpeed;
+    }
+    s.speed = spd;
+
+    const xBefore = s.x, yBefore = s.y;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    resolveBuildingCollisions(s, 0.45);
+
+    if (Math.hypot(s.x - xBefore, s.y - yBefore) < 2) {
+      s.stuckTimer += dt;
+      if (s.stuckTimer > 0.4) {
+        s.routeIndex = (s.routeIndex + 1) % s.route.length;
+        // Snap straight toward the new target instead of easing into it —
+        // a jammed truck needs to break free immediately, not keep grinding
+        // against the wall while it slowly steers out of the corner it cut.
+        const nwp = s.route[s.routeIndex];
+        s.angle = Math.atan2(nwp.y - s.y, nwp.x - s.x);
+        s.vx = Math.cos(s.angle) * s.patrolSpeed * 0.5;
+        s.vy = Math.sin(s.angle) * s.patrolSpeed * 0.5;
+        s.stuckTimer = 0;
+      }
+    } else {
+      s.stuckTimer = 0;
+    }
+
+    t.group.position.set(s.x, 0, s.y);
+    t.group.rotation.set(0, -s.angle, 0);
+
+    const frac = Math.max(0, s.cash / s.maxCash);
+    t.gaugeFill.scale.x = 42 * frac;
+    t.gaugeFillMat.color.copy(gaugeEmptyColor).lerp(gaugeFullColor, frac);
+  }
+}
+
+// A soft bump like before, but now also extracts cash: on the first contact
+// after the cooldown expires, some of the truck's cash gauge transfers to
+// the player's running total with a burst of flying bills. Once a truck's
+// cash hits zero it despawns, and a fresh one takes its place after a delay.
+function resolvePlayerArmoredTruckCollision(truck) {
+  const s = truck.state;
+  if (!s.alive) return;
+  const dx = car.x - s.x, dy = car.y - s.y;
+  const dist = Math.hypot(dx, dy) || 0.01;
+  const minDist = (Math.max(car.width, car.length) + Math.max(s.width, s.length)) * 0.32;
+  if (dist < minDist) {
+    const overlap = minDist - dist;
+    const nx = dx / dist, ny = dy / dist;
+    car.x += nx * overlap * 0.5;
+    car.y += ny * overlap * 0.5;
+    s.x -= nx * overlap * 0.5;
+    s.y -= ny * overlap * 0.5;
+    const midX = (car.x + s.x) / 2, midY = (car.y + s.y) / 2;
+    spawnSparks(midX, 12, midY, 8);
+    const kick = 200;
+    s.vx = -nx * kick; s.vy = -ny * kick;
+    car.vx += nx * kick * 0.3; car.vy += ny * kick * 0.3;
+
+    if (s.hitCooldown <= 0 && s.cash > 0) {
+      const take = Math.min(ARMORED_CASH_PER_HIT, s.cash);
+      s.cash -= take;
+      playerCash += take;
+      updateCashHUD();
+      spawnMoneyParticles(midX, 14, midY, 12);
+      s.hitCooldown = ARMORED_HIT_COOLDOWN;
+
+      if (s.cash <= 0) {
+        s.alive = false;
+        s.respawnTimer = ARMORED_RESPAWN_DELAY;
+        truck.group.visible = false;
+        spawnMoneyParticles(midX, 14, midY, 20); // bigger final burst when it goes down
+      }
+    }
+  }
+}
+
+// ---------- POLICE HELICOPTER ----------
+// Spawns overhead once any police car starts actively chasing the player,
+// and climbs away once the chase ends. Doesn't collide with anything — it
+// just flies above the city, so no building-collision handling is needed.
+const heli = {
+  state: 'inactive',   // 'inactive' | 'closing' | 'lowAlt' | 'leaving'
+  x: WORLD_W / 2,
+  y: WORLD_H / 2,
+  vx: 0,
+  vy: 0,
+  height: 0,
+  targetHeight: 240,
+  angle: 0,
+  bobPhase: 0,
+  leaveTimer: 0,
+  closingSpeed: 560,      // fast, direct flight while closing in from altitude
+  lowAltSpeed: 420,        // deliberately less than the player's max speed (620) once flying low
+  cruiseHeight: 85,          // low pass altitude — down in the street canyon, clearly visible
+  closingHeight: 380,        // well above every building while closing in
+  avoidMargin: 75             // how close a building has to be before the heli reacts
+};
+
+const heliGroup = new THREE.Group();
+heliGroup.visible = false;
+
+const heliBodyMat = new THREE.MeshLambertMaterial({ color: 0xf2f2f2, transparent: true, opacity: 1 });
+const heliAccentMat = new THREE.MeshLambertMaterial({ color: 0x1a2a4a, transparent: true, opacity: 1 });
+const heliGlassMat = new THREE.MeshLambertMaterial({ color: 0x2b2f33, transparent: true, opacity: 1 });
+const heliRotorMat = new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 1 });
+
+// Fuselage
+const heliBody = new THREE.Mesh(new THREE.CylinderGeometry(9, 6, 34, 10), heliBodyMat);
+heliBody.rotation.z = Math.PI / 2;
+heliBody.position.set(0, 0, 0);
+heliGroup.add(heliBody);
+
+// Cockpit glass (nose)
+const heliCockpit = new THREE.Mesh(new THREE.SphereGeometry(7.5, 10, 8), heliGlassMat);
+heliCockpit.scale.set(1.1, 0.9, 0.9);
+heliCockpit.position.set(15, -1, 0);
+heliGroup.add(heliCockpit);
+
+// Police accent stripe
+const heliStripe = new THREE.Mesh(new THREE.BoxGeometry(26, 3, 12.2), heliAccentMat);
+heliStripe.position.set(-2, 1, 0);
+heliGroup.add(heliStripe);
+
+// Tail boom
+const heliTailBoom = new THREE.Mesh(new THREE.CylinderGeometry(2, 1, 34, 8), heliBodyMat);
+heliTailBoom.rotation.z = Math.PI / 2;
+heliTailBoom.position.set(-30, 3, 0);
+heliGroup.add(heliTailBoom);
+
+// Tail fin + tail rotor
+const heliTailFin = new THREE.Mesh(new THREE.BoxGeometry(4, 8, 2), heliAccentMat);
+heliTailFin.position.set(-46, 7, 0);
+heliGroup.add(heliTailFin);
+const tailRotorGeo = new THREE.BoxGeometry(1, 10, 1.4);
+const heliTailRotor = new THREE.Mesh(tailRotorGeo, heliRotorMat);
+heliTailRotor.position.set(-47, 7, 3);
+heliGroup.add(heliTailRotor);
+
+// Skids
+const skidMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a, transparent: true, opacity: 1 });
+for (const sz of [-8, 8]) {
+  const skid = new THREE.Mesh(new THREE.BoxGeometry(26, 1.4, 1.4), skidMat);
+  skid.position.set(0, -10, sz);
+  heliGroup.add(skid);
+  for (const sx of [-9, 9]) {
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(1.2, 6, 1.2), skidMat);
+    strut.position.set(sx, -5, sz);
+    heliGroup.add(strut);
+  }
+}
+
+// Main rotor mast + blades (spun each frame)
+const heliRotorGroup = new THREE.Group();
+heliRotorGroup.position.set(2, 9, 0);
+const rotorMast = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 4, 8), heliRotorMat);
+heliRotorGroup.add(rotorMast);
+const bladeGeo = new THREE.BoxGeometry(46, 0.8, 2.2);
+for (const rot of [0, Math.PI / 2]) {
+  const blade = new THREE.Mesh(bladeGeo, heliRotorMat);
+  blade.rotation.y = rot;
+  heliRotorGroup.add(blade);
+}
+heliGroup.add(heliRotorGroup);
+
+// Spotlight beam — a downward cone of light tracking the ground below the helicopter
+const spotlightMat = new THREE.MeshBasicMaterial({
+  color: 0xfff2a0, transparent: true, opacity: 0.16,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const spotlightMesh = new THREE.Mesh(new THREE.ConeGeometry(34, 240, 16, 1, true), spotlightMat);
+scene.add(spotlightMesh);
+spotlightMesh.visible = false;
+
+// Invisible bounding proxy used only for occlusion raycasts — cheaper than
+// testing every small visible part, and moves with the group automatically.
+const heliProxyMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(90, 20, 48),
+  new THREE.MeshBasicMaterial({ visible: false })
+);
+heliProxyMesh.position.set(-12, 0, 0);
+heliGroup.add(heliProxyMesh);
+
+// Police beacon lights — flashing red/blue anti-collision lights, same
+// materials and glow textures as the police cars' light bar, so they read
+// as part of the same "police lighting" language. Toggled with lightPhase
+// in the game loop, alongside the police cars' own flashing lights.
+const heliRedLight = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 3), redOff);
+heliRedLight.position.set(2, 11, -5);
+heliGroup.add(heliRedLight);
+const heliBlueLight = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 3), blueOff);
+heliBlueLight.position.set(2, 11, 5);
+heliGroup.add(heliBlueLight);
+const heliRedGlow = makeGlowSprite(policeRedGlowTex, 16);
+heliRedGlow.position.copy(heliRedLight.position);
+heliRedGlow.visible = false;
+heliGroup.add(heliRedGlow);
+const heliBlueGlow = makeGlowSprite(policeBlueGlowTex, 16);
+heliBlueGlow.position.copy(heliBlueLight.position);
+heliBlueGlow.visible = false;
+heliGroup.add(heliBlueGlow);
+
+const heliMaterials = [heliBodyMat, heliAccentMat, heliGlassMat, heliRotorMat, skidMat];
+heli.opacity = 1;
+
+scene.add(heliGroup);
+
+function updateHelicopter(dt, anyChasing) {
+  if (heli.state === 'inactive') {
+    if (anyChasing) {
+      heli.state = 'closing';
+      heli.x = car.x;
+      heli.y = car.y;
+      heli.vx = 0; heli.vy = 0;
+      heli.height = 500; // starts high and descends in, like it's arriving on scene
+      heliGroup.visible = true;
+      spotlightMesh.visible = true;
+    } else {
+      updateHelicopterSound(false, Infinity);
+      return;
+    }
+  } else if (heli.state !== 'leaving' && !anyChasing) {
+    heli.state = 'leaving';
+    heli.leaveTimer = 3;
+  }
+
+  const distToPlayer = Math.hypot(car.x - heli.x, car.y - heli.y);
+
+  if (heli.state === 'closing') {
+    // Flies straight for the player at altitude, well above every building.
+    heli.targetHeight = heli.closingHeight;
+    const dx = car.x - heli.x, dy = car.y - heli.y;
+    const d = Math.hypot(dx, dy) || 1;
+    heli.vx = (dx / d) * heli.closingSpeed;
+    heli.vy = (dy / d) * heli.closingSpeed;
+    heli.x += heli.vx * dt;
+    heli.y += heli.vy * dt;
+
+    if (distToPlayer < 60) {
+      heli.state = 'lowAlt';
+    }
+  } else if (heli.state === 'lowAlt') {
+    // If the player has pulled far enough away, climb back out and close the
+    // distance again rather than crawling after them at street level.
+    if (distToPlayer > 380) {
+      heli.state = 'closing';
+    } else {
+      // Street-following: move along whichever axis (x or y) has the larger
+      // gap to the player, one road-aligned direction at a time — this keeps
+      // it roughly tracking the road grid instead of cutting diagonally
+      // through blocks.
+      const dx = car.x - heli.x, dy = car.y - heli.y;
+      let moveAngle;
+      if (Math.abs(dx) > Math.abs(dy)) moveAngle = dx > 0 ? 0 : Math.PI;
+      else moveAngle = dy > 0 ? Math.PI / 2 : -Math.PI / 2;
+
+      const clearance = nearestBuildingClearance(
+        heli.x + Math.cos(moveAngle) * heli.avoidMargin,
+        heli.y + Math.sin(moveAngle) * heli.avoidMargin,
+        heli.avoidMargin
+      );
+
+      let speedLimit = heli.lowAltSpeed;
+      if (clearance.blocked) {
+        // Nearing a building: slow to a hover and climb above it.
+        heli.targetHeight = clearance.tallest + 60;
+        speedLimit = 0;
+      } else {
+        heli.targetHeight = heli.cruiseHeight;
+      }
+
+      heli.vx += Math.cos(moveAngle) * 380 * dt;
+      heli.vy += Math.sin(moveAngle) * 380 * dt;
+      let spd = Math.hypot(heli.vx, heli.vy);
+      if (spd > speedLimit) {
+        const scale = speedLimit > 0 ? speedLimit / spd : 0;
+        heli.vx *= scale; heli.vy *= scale;
+      } else {
+        // gentle drag so it doesn't hover with residual sideways drift
+        heli.vx *= Math.exp(-3 * dt);
+        heli.vy *= Math.exp(-3 * dt);
+      }
+      heli.x += heli.vx * dt;
+      heli.y += heli.vy * dt;
+    }
+  } else if (heli.state === 'leaving') {
+    heli.leaveTimer -= dt;
+    heli.targetHeight = 900; // climbs up and away
+    if (heli.leaveTimer <= 0) {
+      heli.state = 'inactive';
+      heliGroup.visible = false;
+      spotlightMesh.visible = false;
+      updateHelicopterSound(false, Infinity);
+      return;
+    }
+  }
+
+  heli.height += (heli.targetHeight - heli.height) * Math.min(1, dt * 1.2);
+  heli.bobPhase += dt;
+  const bob = Math.sin(heli.bobPhase * 2) * 3;
+
+  const dx = car.x - heli.x, dy = car.y - heli.y;
+  if (Math.hypot(dx, dy) > 5) {
+    const targetAngle = Math.atan2(dy, dx);
+    const diff = shortestAngleDiff(heli.angle, targetAngle);
+    heli.angle += Math.sign(diff) * Math.min(Math.abs(diff), 2.2 * dt);
+  }
+
+  heliGroup.position.set(heli.x, heli.height + bob, heli.y);
+  heliGroup.rotation.set(0, -heli.angle, 0);
+  heliRotorGroup.rotation.y += dt * 40; // fast main rotor spin
+  heliTailRotor.rotation.x += dt * 50;
+
+  // Spotlight beam angles toward the player, but only within a limited cone
+  // from straight down. Beyond that tilt — player too far to the side relative
+  // to the helicopter's current altitude — the beam simply can't reach them.
+  const spotlightShouldBeOn = heliGroup.visible && heli.state !== 'leaving';
+  if (spotlightShouldBeOn) {
+    const heliPos = new THREE.Vector3(heli.x, heli.height + bob, heli.y);
+    const playerPos = new THREE.Vector3(car.x, 10, car.y);
+    const horizDist = Math.hypot(car.x - heli.x, car.y - heli.y);
+    const vertDist = Math.max(1, heliPos.y - playerPos.y);
+    const tiltAngle = Math.atan2(horizDist, vertDist);
+    const maxSpotlightTilt = Math.PI / 4; // 45° cone — beyond this the light can't reach
+    if (tiltAngle <= maxSpotlightTilt) {
+      spotlightMesh.visible = true;
+      const beamLen = heliPos.distanceTo(playerPos) || 1;
+      const upDir = heliPos.clone().sub(playerPos).normalize();
+      spotlightMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), upDir);
+      spotlightMesh.position.copy(heliPos).add(playerPos).multiplyScalar(0.5);
+      spotlightMesh.scale.set(1, beamLen / 240, 1);
+    } else {
+      spotlightMesh.visible = false;
+    }
+  } else {
+    spotlightMesh.visible = false;
+  }
+
+  updateHelicopterSound(true, distToPlayer);
+}
+
+
+// ---------- GAME LOOP ----------
+let lastTime = performance.now();
+
+const DIR_ANGLE = {
+  up: -Math.PI / 2,
+  down: Math.PI / 2,
+  left: Math.PI,
+  right: 0
+};
+
+function shortestAngleDiff(from, to) {
+  let diff = (to - from) % (Math.PI * 2);
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  return diff;
+}
+
+// Skid marks as real flat decal meshes laid on the road, faded out over time
+const skidGeo = new THREE.CircleGeometry(3.2, 8);
+const skidMeshes = [];
+function spawnSkidMark(x, z) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0x080808, transparent: true, opacity: 0.8, depthWrite: false });
+  const mesh = new THREE.Mesh(skidGeo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(x, 0.05, z);
+  scene.add(mesh);
+  skidMeshes.push({ mesh, alpha: 0.8 });
+  if (skidMeshes.length > 300) {
+    const old = skidMeshes.shift();
+    scene.remove(old.mesh);
+    old.mesh.material.dispose();
+  }
+}
+function updateSkidMarks(dt) {
+  for (let i = skidMeshes.length - 1; i >= 0; i--) {
+    const s = skidMeshes[i];
+    s.alpha -= dt * 0.05;
+    s.mesh.material.opacity = Math.max(0, s.alpha);
+    if (s.alpha <= 0) {
+      scene.remove(s.mesh);
+      s.mesh.material.dispose();
+      skidMeshes.splice(i, 1);
+    }
+  }
+}
+
+// Handles driving up the ramp incline, launching off the top edge, falling
+// back to the ground under gravity, and despawning the ramp once it's been
+// cleared. Called once per frame from update(), after car.x/car.y have
+// already been integrated for this frame.
+function updateRampPhysics(dt) {
+  let overFootprint = false;
+  let along = 0;
+
+  if (rampState) {
+    const dx = car.x - rampState.entryX, dy = car.y - rampState.entryY;
+    along = dx * rampState.forwardX + dy * rampState.forwardY;   // 0 at entry, RAMP_LENGTH at exit
+    const across = dx * rampState.rightX + dy * rampState.rightY; // lateral offset from centerline
+    overFootprint = along >= 0 && along <= RAMP_LENGTH && Math.abs(across) < RAMP_WIDTH / 2;
+  }
+
+  if (overFootprint && !car.airborne) {
+    // Physically on the ramp surface — snap height to the incline so it
+    // reads as driving up a solid slope rather than floating/clipping.
+    const t = along / RAMP_LENGTH; // 0 at the bottom, 1 at the top edge
+    car.z = t * RAMP_HEIGHT;
+    car.vz = 0;
+    car.pitch += (RAMP_INCLINE - car.pitch) * Math.min(1, dt * 6);
+    car.onRamp = true;
+    rampState.engaged = true;
+  } else {
+    if (car.onRamp) {
+      // Just left the ramp surface this frame. If that happened near the
+      // top (rather than sliding off the side partway up), launch it.
+      if (car.z > RAMP_HEIGHT * 0.5) {
+        car.vz = Math.max(60, Math.abs(car.speed) * Math.sin(RAMP_INCLINE));
+        car.airborne = true;
+      }
+      car.onRamp = false;
+    }
+    if (car.airborne || car.z > 0 || car.vz !== 0) {
+      // Mid-air — simple projectile motion until it lands back at z = 0.
+      car.vz -= GRAVITY * dt;
+      car.z += car.vz * dt;
+      car.pitch += (0 - car.pitch) * Math.min(1, dt * 2);
+      if (car.z <= 0) {
+        car.z = 0;
+        car.vz = 0;
+        if (car.airborne) spawnSmoke(car.x, 2, car.y, 6); // landing dust puff
+        car.airborne = false;
+      }
+    } else {
+      car.pitch += (0 - car.pitch) * Math.min(1, dt * 6);
+    }
+  }
+
+  // Despawn once the player has cleared it: they engaged the ramp, then are
+  // back on the ground and no longer over its footprint — or it's simply
+  // timed out because they never reached it.
+  if (rampState) {
+    const clearedAfterLaunch = rampState.engaged && !car.airborne && !car.onRamp && car.z === 0 && !overFootprint;
+    const timedOut = !rampState.engaged && performance.now() - rampState.spawnedAt > RAMP_LIFETIME_MS;
+    if (clearedAfterLaunch || timedOut) despawnRamp();
+  }
+}
+
+function update(dt) {
+  const busted = damageState.busted;
+  const kbUp = !busted && (keys['arrowup'] || keys['w']);
+  const kbDown = !busted && (keys['arrowdown'] || keys['s']);
+  const kbLeft = !busted && (keys['arrowleft'] || keys['a']);
+  const kbRight = !busted && (keys['arrowright'] || keys['d']);
+  const handbrake = !busted && keys[' '];
+
+  // Combine keyboard (full-magnitude, digital) and the mobile thumbstick
+  // (analog, -1..1) into one pair of continuous inputs so both control
+  // schemes drive the same physics below. steerInput: -1 (left) .. 1 (right).
+  // throttleInput: -1 (full brake/reverse) .. 1 (full accelerator).
+  let steerInput = (kbLeft ? -1 : 0) + (kbRight ? 1 : 0);
+  let throttleInput = (kbUp ? 1 : 0) + (kbDown ? -1 : 0);
+  if (!busted && touchStick.active) {
+    steerInput = Math.max(-1, Math.min(1, steerInput + touchStick.x));
+    throttleInput = Math.max(-1, Math.min(1, throttleInput - touchStick.y));
+  }
+  if (jTurn.active || grapple.active) {
+    // The scripted spin/arc below owns steering and throttle for its duration —
+    // player input is ignored so it can't fight the animation.
+    steerInput = 0;
+    throttleInput = 0;
+  }
+  const up = throttleInput > 0.08;
+  const down = throttleInput < -0.08;
+  setTaillightGlow(down ? -throttleInput : 0);
+
+  // Nitro: a temporary burst of acceleration and top speed, triggered by Alt.
+  if (car.nitroTimer > 0) car.nitroTimer = Math.max(0, car.nitroTimer - dt);
+  const nitroActive = car.nitroTimer > 0;
+  const effAccel = nitroActive ? car.accel * car.nitroAccelMult : car.accel;
+  const effMaxSpeed = nitroActive ? car.maxSpeed * car.nitroMaxSpeedMult : car.maxSpeed;
+
+  // 1. Steering: rotates the nose relative to the car's current orientation
+  //    (not a world-space direction), scaled by current speed.
+  const speedFactorSteer = Math.min(1, Math.abs(car.speed) / (car.maxSpeed * 0.5));
+  const steerAmount = car.turnRate * (0.3 + 0.7 * speedFactorSteer) * dt;
+  car.angle += steerAmount * steerInput; // steerInput carries both direction and analog magnitude
+
+  if (jTurn.active) {
+    jTurn.elapsed += dt;
+    const t = Math.min(1, jTurn.elapsed / jTurn.duration);
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // ease-in-out
+    car.angle = jTurn.startAngle + jTurn.spinDir * Math.PI * eased;
+    if (t >= 1) {
+      jTurn.active = false;
+      car.angle = jTurn.startAngle + jTurn.spinDir * Math.PI;
+      jTurnIndicatorEl.style.display = 'none';
+    }
+  }
+
+  const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
+  const forwardSpeedBefore = car.vx * fx + car.vy * fy;
+
+  // 2. Accelerator / brake / reverse — engine force along the nose direction,
+  //    scaled by throttle magnitude (full strength from keyboard, analog from the stick).
+  if (up) {
+    car.vx += fx * effAccel * throttleInput * dt;
+    car.vy += fy * effAccel * throttleInput * dt;
+  }
+  if (down) {
+    const mag = -throttleInput;
+    if (forwardSpeedBefore > 15) {
+      // still rolling forward — this is a brake
+      car.vx -= fx * car.brakeDecel * mag * dt;
+      car.vy -= fy * car.brakeDecel * mag * dt;
+    } else {
+      // stopped or already reversing — this is the reverse gear
+      car.vx -= fx * car.reverseAccel * mag * dt;
+      car.vy -= fy * car.reverseAccel * mag * dt;
+    }
+  }
+
+  // 3. Split velocity into forward (along nose) and lateral (sideways slip) components.
+  const forwardSpeed = car.vx * fx + car.vy * fy;
+  let latX = car.vx - forwardSpeed * fx;
+  let latY = car.vy - forwardSpeed * fy;
+  const lateralSpeed = Math.hypot(latX, latY);
+
+  // 4. Grip bleeds off the lateral (sideways) component over time — this is the drift.
+  //    Handbrake loosens grip a lot, so the car slides much more when you hold space,
+  //    and leans into the turn while it does.
+  const currentGrip = (handbrake || jTurn.active) ? car.driftGrip : car.grip;
+  const gripFactor = Math.exp(-currentGrip * dt);
+  latX *= gripFactor;
+  latY *= gripFactor;
+
+  // 5. Rolling resistance slows the forward component, more so with no input / handbrake.
+  const anyDrive = up || down;
+  const dragRate = handbrake ? car.friction * 2.2 : (anyDrive ? car.friction * 0.15 : car.friction);
+  let newForward = forwardSpeed;
+  if (newForward > 0) newForward = Math.max(0, newForward - dragRate * dt);
+  else if (newForward < 0) newForward = Math.min(0, newForward + dragRate * dt);
+  newForward = Math.max(-car.reverseAccel * 0.7, Math.min(effMaxSpeed, newForward));
+
+  // Recombine, then clamp overall speed
+  car.vx = fx * newForward + latX;
+  car.vy = fy * newForward + latY;
+  const totalSpeed = Math.hypot(car.vx, car.vy);
+  if (totalSpeed > effMaxSpeed) {
+    const scale = effMaxSpeed / totalSpeed;
+    car.vx *= scale;
+    car.vy *= scale;
+  }
+  car.speed = Math.hypot(car.vx, car.vy);
+  updateEngineSound(Math.abs(throttleInput), Math.min(1, Math.abs(car.speed) / car.maxSpeed));
+  updateTireScreechSound(lateralSpeed);
+
+  // Medians: no collision (cars clip straight through), but crossing one
+  // costs 15% top speed and kicks up leaves while inside it.
+  if (isInMedian(car.x, car.y)) {
+    const medianCap = effMaxSpeed * 0.85;
+    const spd = Math.hypot(car.vx, car.vy);
+    if (spd > medianCap) {
+      const scale = medianCap / spd;
+      car.vx *= scale;
+      car.vy *= scale;
+      car.speed = Math.hypot(car.vx, car.vy);
+    }
+    car.medianLeafTimer -= dt;
+    if (car.medianLeafTimer <= 0) {
+      spawnLeaves(car.x, 6, car.y, 5);
+      car.medianLeafTimer = 0.12;
+    }
+  }
+
+  car.x += car.vx * dt;
+  car.y += car.vy * dt;
+
+  updateRampPhysics(dt);
+  updateGrapple(dt);
+
+  // 6. Visual lean: banks into the turn from steering input, and leans further
+  //    into the slide the harder the car is drifting. Cosmetic only — no physics effect.
+  const rightX = -fy, rightY = fx;
+  const lateralSigned = latX * rightX + latY * rightY; // + = sliding right, - = sliding left
+  let leanTarget = steerInput * car.maxLean * speedFactorSteer;
+  leanTarget += Math.max(-1, Math.min(1, lateralSigned / 260)) * car.maxLean * 0.8;
+  leanTarget = Math.max(-car.maxLean, Math.min(car.maxLean, leanTarget));
+  car.lean += (leanTarget - car.lean) * Math.min(1, dt * 8);
+
+  // Skid marks: spawn behind the rear wheels whenever the car is sliding sideways.
+  if (lateralSpeed > 90) {
+    const rearOffset = car.length / 2 - 4;
+    const trackOffset = car.width / 2 - 5;
+    const rx = -Math.cos(car.angle) * rearOffset;
+    const ry = -Math.sin(car.angle) * rearOffset;
+    const px = -Math.sin(car.angle) * trackOffset;
+    const py = Math.cos(car.angle) * trackOffset;
+    spawnSkidMark(car.x + rx + px, car.y + ry + py);
+    spawnSkidMark(car.x + rx - px, car.y + ry - py);
+    spawnSmoke(car.x + rx + px, 2, car.y + ry + py, 1);
+    spawnSmoke(car.x + rx - px, 2, car.y + ry - py, 1);
+  }
+
+  if (!grapple.active) resolveBuildingCollisions(car, undefined, true);
+
+  // HUD speed (convert to arbitrary "mph" for arcade feel)
+  const mph = Math.round(Math.abs(car.speed) / 620 * 90);
+  document.getElementById('speedVal').textContent = mph;
+
+  // Once the player actually starts driving, the control instructions have
+  // done their job — fade them out and leave them hidden (a stop later
+  // shouldn't bring the tutorial text back).
+  if (!controlsHintHidden && Math.abs(car.speed) > 5) {
+    controlsHintHidden = true;
+    controlsHintEl.style.opacity = '0';
+    controlsHintEl.style.pointerEvents = 'none';
+  }
+}
+
+function updateAllPolice(dt) {
+  // The helicopter's spotlight beam always lands exactly on the player while
+  // it's actively tracking them (closing in, or flying low overhead) — that
+  // "spotlight on the player" moment is treated as it radioing every patrol
+  // car in to intercept, not just whichever car is already close enough to
+  // spot the player on its own.
+  const spotlightOnPlayer = spotlightMesh.visible;
+
+  // Pass 1: pause timers (frozen after bouncing off the player) and mode transitions
+  for (const p of policeCars) {
+    const s = p.state;
+    if (s.pauseTimer > 0) {
+      s.pauseTimer = Math.max(0, s.pauseTimer - dt);
+      s.vx *= Math.exp(-4 * dt);
+      s.vy *= Math.exp(-4 * dt);
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.speed = Math.hypot(s.vx, s.vy);
+      resolveBuildingCollisions(s, 0.45);
+      continue;
+    }
+    const dist = Math.hypot(car.x - s.x, car.y - s.y);
+    if (s.mode === 'patrol' && (dist < s.detectRadius || spotlightOnPlayer)) s.mode = 'chase';
+    else if (s.mode === 'chase' && dist > s.loseRadius && !spotlightOnPlayer) s.mode = 'patrol';
+  }
+
+  // Pass 2: rank the actively-chasing cars by distance to the player. The
+  // closest one goes straight for the player; every other chaser instead
+  // follows the car immediately ahead of it in that ranking, forming a convoy
+  // rather than everyone converging on the exact same point.
+  const chasers = policeCars.filter(p => p.state.pauseTimer <= 0 && p.state.mode === 'chase');
+  chasers.sort((a, b) => {
+    const da = Math.hypot(car.x - a.state.x, car.y - a.state.y);
+    const db = Math.hypot(car.x - b.state.x, car.y - b.state.y);
+    return da - db;
+  });
+
+  // Pass 3: move every non-paused car
+  let policeMaxLateral = 0;
+  let policeMaxLateralDist = Infinity;
+  for (const p of policeCars) {
+    const s = p.state;
+    if (s.pauseTimer > 0) continue; // already handled in pass 1
+
+    let targetAngle, speedLimit, accelRate;
+    if (s.mode === 'chase') {
+      const idx = chasers.indexOf(p);
+      const leader = idx <= 0 ? null : chasers[idx - 1].state;
+      const targetX = leader ? leader.x : car.x;
+      const targetY = leader ? leader.y : car.y;
+      targetAngle = Math.atan2(targetY - s.y, targetX - s.x);
+      speedLimit = s.chaseSpeed;
+      accelRate = 520;
+    } else {
+      // Patrol: loop through this car's own fixed circuit of waypoints.
+      const wp = s.route[s.routeIndex];
+      const wdx = wp.x - s.x, wdy = wp.y - s.y;
+      if (Math.hypot(wdx, wdy) < 40) {
+        s.routeIndex = (s.routeIndex + 1) % s.route.length;
+      }
+      targetAngle = Math.atan2(wdy, wdx);
+      speedLimit = s.patrolSpeed;
+      accelRate = 300;
+    }
+
+    const angleBefore = s.angle;
+    const diff = shortestAngleDiff(s.angle, targetAngle);
+    const maxStep = s.turnRate * dt;
+    if (Math.abs(diff) <= maxStep) s.angle = targetAngle;
+    else s.angle += Math.sign(diff) * maxStep;
+
+    s.vx += Math.cos(s.angle) * accelRate * dt;
+    s.vy += Math.sin(s.angle) * accelRate * dt;
+
+    let spd = Math.hypot(s.vx, s.vy);
+    if (spd > speedLimit) {
+      const scale = speedLimit / spd;
+      s.vx *= scale;
+      s.vy *= scale;
+      spd = speedLimit;
+    }
+    s.speed = spd;
+
+    // Police cars don't have a separate lateral-slip model like the player
+    // (their velocity always points straight down their heading), so
+    // approximate how hard they're "sliding" through a turn from how fast
+    // they're turning relative to their current speed — fast + sharp turn
+    // reads as a corner slide, same threshold the player's tires use.
+    const angularVelocity = Math.abs(shortestAngleDiff(angleBefore, s.angle)) / dt;
+    const lateralProxy = Math.min(1, angularVelocity / s.turnRate) * spd;
+    if (lateralProxy > 90) {
+      const rearOffset = s.length / 2 - 4;
+      const trackOffset = s.width / 2 - 5;
+      const rx = -Math.cos(s.angle) * rearOffset;
+      const ry = -Math.sin(s.angle) * rearOffset;
+      const px = -Math.sin(s.angle) * trackOffset;
+      const py = Math.cos(s.angle) * trackOffset;
+      spawnSkidMark(s.x + rx + px, s.y + ry + py);
+      spawnSkidMark(s.x + rx - px, s.y + ry - py);
+      spawnSmoke(s.x + rx + px, 2, s.y + ry + py, 1);
+      spawnSmoke(s.x + rx - px, 2, s.y + ry - py, 1);
+      if (lateralProxy > policeMaxLateral) {
+        policeMaxLateral = lateralProxy;
+        policeMaxLateralDist = Math.hypot(car.x - s.x, car.y - s.y);
+      }
+    }
+
+    // Medians: no collision (cars clip straight through), but crossing one
+    // costs 15% top speed and kicks up leaves while inside it.
+    if (isInMedian(s.x, s.y)) {
+      const medianCap = speedLimit * 0.85;
+      if (spd > medianCap) {
+        const scale = medianCap / spd;
+        s.vx *= scale;
+        s.vy *= scale;
+        s.speed = Math.hypot(s.vx, s.vy);
+      }
+      s.medianLeafTimer -= dt;
+      if (s.medianLeafTimer <= 0) {
+        spawnLeaves(s.x, 6, s.y, 5);
+        s.medianLeafTimer = 0.12;
+      }
+    }
+
+    const xBefore = s.x, yBefore = s.y;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+
+    resolveBuildingCollisions(s, 0.45);
+
+    // If patrol got stuck against something, skip ahead to the next waypoint
+    // rather than idling forever against a wall.
+    if (s.mode === 'patrol') {
+      if (Math.hypot(s.x - xBefore, s.y - yBefore) < 2) {
+        s.stuckTimer += dt;
+        if (s.stuckTimer > 0.6) {
+          s.routeIndex = (s.routeIndex + 1) % s.route.length;
+          s.stuckTimer = 0;
+        }
+      } else {
+        s.stuckTimer = 0;
+      }
+    }
+  }
+
+  resolvePoliceCollisions();
+  updatePoliceScreechSound(policeMaxLateral, policeMaxLateralDist);
+}
+
+// Keeps police cars from overlapping each other: pushes any overlapping pair
+// apart, bounces their velocity, and throws sparks at the contact point —
+// this also naturally sets a following distance for the convoy above, since
+// a trailing car pushing into the one ahead just gets shoved back off it.
+function resolvePoliceCollisions() {
+  for (let i = 0; i < policeCars.length; i++) {
+    for (let j = i + 1; j < policeCars.length; j++) {
+      const a = policeCars[i].state, b = policeCars[j].state;
+      const dx = a.x - b.x, dy = a.y - b.y;
+      const dist = Math.hypot(dx, dy) || 0.01;
+      const minDist = (Math.max(a.width, a.length) + Math.max(b.width, b.length)) * 0.34;
+      if (dist < minDist) {
+        const overlap = minDist - dist;
+        const nx = dx / dist, ny = dy / dist;
+        a.x += nx * overlap * 0.5;
+        a.y += ny * overlap * 0.5;
+        b.x -= nx * overlap * 0.5;
+        b.y -= ny * overlap * 0.5;
+
+        const kick = 200;
+        a.vx += nx * kick; a.vy += ny * kick;
+        b.vx -= nx * kick; b.vy -= ny * kick;
+
+        spawnSparks((a.x + b.x) / 2, 14, (a.y + b.y) / 2, 10);
+      }
+    }
+  }
+}
+
+
+
+// ---------- CAMERA: shallow three-quarter chase cam with occlusion fade ----------
+const raycaster = new THREE.Raycaster();
+const camState = {
+  pos: new THREE.Vector3(car.x - 200, 95, car.y - 200),
+  look: new THREE.Vector3(car.x, 18, car.y)
+};
+camera3D.position.copy(camState.pos);
+
+function updateCamera(dt) {
+  const forward = { x: Math.cos(car.angle), z: Math.sin(car.angle) };
+  const right = { x: -Math.sin(car.angle), z: Math.cos(car.angle) };
+
+  const backDist = 250;   // how far behind the car the camera trails
+  const sideDist = 140;    // side offset — this is what gives the three-quarter framing
+  const camHeight = 100;    // low relative to backDist/sideDist = shallow viewing angle
+
+  const desiredX = car.x - forward.x * backDist + right.x * sideDist;
+  const desiredZ = car.y - forward.z * backDist + right.z * sideDist;
+  const desiredY = camHeight + car.z * 0.5; // rises partway during a ramp jump so the car stays framed
+
+  const followLerp = Math.min(1, dt * 3.2);
+  camState.pos.x += (desiredX - camState.pos.x) * followLerp;
+  camState.pos.y += (desiredY - camState.pos.y) * followLerp;
+  camState.pos.z += (desiredZ - camState.pos.z) * followLerp;
+
+  const lookLerp = Math.min(1, dt * 5);
+  camState.look.x += (car.x - camState.look.x) * lookLerp;
+  camState.look.y += (18 + car.z * 0.5 - camState.look.y) * lookLerp;
+  camState.look.z += (car.y - camState.look.z) * lookLerp;
+
+  camera3D.position.copy(camState.pos);
+  camera3D.lookAt(camState.look);
+
+  // Any building sitting on the line between the camera and a vehicle (the
+  // player, or any police car) fades toward transparent so that vehicle stays
+  // visible behind it.
+  const occluding = new Set();
+  const targets = [camState.look];
+  for (const p of policeCars) targets.push(new THREE.Vector3(p.state.x, 18, p.state.y));
+
+  for (const target of targets) {
+    const dir = new THREE.Vector3(
+      target.x - camState.pos.x,
+      target.y - camState.pos.y,
+      target.z - camState.pos.z
+    );
+    const dist = dir.length();
+    if (dist < 1) continue;
+    dir.normalize();
+    raycaster.set(camState.pos, dir);
+    raycaster.far = Math.max(1, dist - 20);
+    const hits = raycaster.intersectObjects(buildingMeshes);
+    for (const h of hits) occluding.add(h.object);
+  }
+
+  for (const mesh of buildingMeshes) {
+    mesh.userData.targetOpacity = occluding.has(mesh) ? 0.2 : 1;
+    const mat = mesh.material;
+    mat.opacity += (mesh.userData.targetOpacity - mat.opacity) * Math.min(1, dt * 6);
+    mat.depthWrite = mat.opacity > 0.95;
+  }
+
+  // If the helicopter itself is sitting between the camera and the player's
+  // car, fade it toward transparent so the car stays visible underneath it.
+  if (heliGroup.visible) {
+    const toPlayer = new THREE.Vector3(
+      car.x - camState.pos.x,
+      18 - camState.pos.y,
+      car.y - camState.pos.z
+    );
+    const distToPlayer = toPlayer.length();
+    toPlayer.normalize();
+    raycaster.set(camState.pos, toPlayer);
+    raycaster.far = Math.max(1, distToPlayer - 5);
+    const heliBlocking = raycaster.intersectObject(heliProxyMesh).length > 0;
+    const targetOpacity = heliBlocking ? 0.22 : 1;
+    heli.opacity += (targetOpacity - heli.opacity) * Math.min(1, dt * 7);
+    for (const mat of heliMaterials) {
+      mat.opacity = heli.opacity;
+      mat.depthWrite = heli.opacity > 0.95;
+    }
+  }
+}
+
+const chaseAlertEl = document.getElementById('chaseAlert');
+let lightPhase = false;
+let lightPhaseTimer = 0;
+
+// Sparks — small bright particles that burst outward on collision
+const sparkGeo = new THREE.BoxGeometry(2, 2, 2);
+const sparkParticles = [];
+function spawnSparks(x, y, z, count) {
+  for (let i = 0; i < (count || 10); i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffcc33, transparent: true, opacity: 1 });
+    const mesh = new THREE.Mesh(sparkGeo, mat);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 60 + Math.random() * 100;
+    sparkParticles.push({
+      mesh,
+      vx: Math.cos(ang) * spd,
+      vy: 50 + Math.random() * 80,
+      vz: Math.sin(ang) * spd,
+      life: 0.3 + Math.random() * 0.25,
+      maxLife: 0.55
+    });
+    if (sparkParticles.length > 200) {
+      const old = sparkParticles.shift();
+      scene.remove(old.mesh);
+      old.mesh.material.dispose();
+    }
+  }
+}
+function updateSparks(dt) {
+  for (let i = sparkParticles.length - 1; i >= 0; i--) {
+    const s = sparkParticles[i];
+    s.vy -= 260 * dt; // gravity
+    s.mesh.position.x += s.vx * dt;
+    s.mesh.position.y += s.vy * dt;
+    s.mesh.position.z += s.vz * dt;
+    s.life -= dt;
+    s.mesh.material.opacity = Math.max(0, s.life / s.maxLife);
+    if (s.life <= 0 || s.mesh.position.y < 0) {
+      scene.remove(s.mesh);
+      s.mesh.material.dispose();
+      sparkParticles.splice(i, 1);
+    }
+  }
+}
+
+// Leaves — kicked up when a car clips through a median, drift up and out in a
+// gentle puff, then tumble and fall slowly to the ground before fading out.
+const leafGeo = new THREE.PlaneGeometry(4, 3);
+const leafColors = [0x6a8f3f, 0x8a9f4f, 0x7a6a30];
+const leafParticles = [];
+function spawnLeaves(x, y, z, count) {
+  for (let i = 0; i < (count || 5); i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: leafColors[i % leafColors.length], transparent: true, opacity: 1, side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(leafGeo, mat);
+    mesh.position.set(x + (Math.random() - 0.5) * 10, y, z + (Math.random() - 0.5) * 10);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    scene.add(mesh);
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 15 + Math.random() * 25;
+    leafParticles.push({
+      mesh,
+      vx: Math.cos(ang) * spd,
+      vy: 35 + Math.random() * 35,
+      vz: Math.sin(ang) * spd,
+      rotSpeedX: (Math.random() - 0.5) * 3,
+      rotSpeedY: (Math.random() - 0.5) * 3,
+      rotSpeedZ: (Math.random() - 0.5) * 3,
+      life: 1.6 + Math.random() * 0.8
+    });
+    if (leafParticles.length > 150) {
+      const old = leafParticles.shift();
+      scene.remove(old.mesh);
+      old.mesh.material.dispose();
+    }
+  }
+}
+function updateLeaves(dt) {
+  for (let i = leafParticles.length - 1; i >= 0; i--) {
+    const l = leafParticles[i];
+    l.vy -= 45 * dt; // gentle gravity — falls slowly rather than dropping like a spark
+    l.vx *= (1 - 0.6 * dt); // air drag so the outward puff settles into a gentle drift
+    l.vz *= (1 - 0.6 * dt);
+    l.mesh.position.x += l.vx * dt;
+    l.mesh.position.y += l.vy * dt;
+    l.mesh.position.z += l.vz * dt;
+    l.mesh.rotation.x += l.rotSpeedX * dt;
+    l.mesh.rotation.y += l.rotSpeedY * dt;
+    l.mesh.rotation.z += l.rotSpeedZ * dt;
+    l.life -= dt;
+    l.mesh.material.opacity = Math.max(0, Math.min(1, l.life / 0.6));
+    if (l.life <= 0 || l.mesh.position.y < 0) {
+      scene.remove(l.mesh);
+      l.mesh.material.dispose();
+      leafParticles.splice(i, 1);
+    }
+  }
+}
+
+// Money — kicked loose when the player hits an armored truck. Same puff-up
+// and gentle-fall behavior as the leaf particles above, just bill-shaped
+// (a small elongated rectangle) and in cash-green tones instead.
+const moneyGeo = new THREE.PlaneGeometry(6, 3);
+const moneyColors = [0x3ddc63, 0x2ecc55, 0x1fae44];
+const moneyParticles = [];
+function spawnMoneyParticles(x, y, z, count) {
+  for (let i = 0; i < (count || 8); i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: moneyColors[i % moneyColors.length], transparent: true, opacity: 1, side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(moneyGeo, mat);
+    mesh.position.set(x + (Math.random() - 0.5) * 10, y, z + (Math.random() - 0.5) * 10);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    scene.add(mesh);
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 25 + Math.random() * 40; // punchier scatter than the leaves — this is a cash burst, not a light puff
+    moneyParticles.push({
+      mesh,
+      vx: Math.cos(ang) * spd,
+      vy: 55 + Math.random() * 45,
+      vz: Math.sin(ang) * spd,
+      rotSpeedX: (Math.random() - 0.5) * 4,
+      rotSpeedY: (Math.random() - 0.5) * 4,
+      rotSpeedZ: (Math.random() - 0.5) * 4,
+      life: 1.4 + Math.random() * 0.7
+    });
+    if (moneyParticles.length > 150) {
+      const old = moneyParticles.shift();
+      scene.remove(old.mesh);
+      old.mesh.material.dispose();
+    }
+  }
+}
+function updateMoneyParticles(dt) {
+  for (let i = moneyParticles.length - 1; i >= 0; i--) {
+    const m = moneyParticles[i];
+    m.vy -= 55 * dt; // slightly heavier fall than leaves — reads as a bill, not paper fluff
+    m.vx *= (1 - 0.5 * dt);
+    m.vz *= (1 - 0.5 * dt);
+    m.mesh.position.x += m.vx * dt;
+    m.mesh.position.y += m.vy * dt;
+    m.mesh.position.z += m.vz * dt;
+    m.mesh.rotation.x += m.rotSpeedX * dt;
+    m.mesh.rotation.y += m.rotSpeedY * dt;
+    m.mesh.rotation.z += m.rotSpeedZ * dt;
+    m.life -= dt;
+    m.mesh.material.opacity = Math.max(0, Math.min(1, m.life / 0.6));
+    if (m.life <= 0 || m.mesh.position.y < 0) {
+      scene.remove(m.mesh);
+      m.mesh.material.dispose();
+      moneyParticles.splice(i, 1);
+    }
+  }
+}
+
+// Tire smoke — soft gray puffs spawned alongside fresh skid marks, drifting
+// up off the pavement while expanding and fading out. Uses the same soft
+// radial-gradient sprite trick as the headlight/taillight glow halos, just
+// with normal (not additive) blending so it reads as smoke, not light.
+const smokeTex = createGlowTexture(0x9a9a9a);
+const smokeParticles = [];
+function spawnSmoke(x, y, z, count) {
+  for (let i = 0; i < (count || 2); i++) {
+    const mat = new THREE.SpriteMaterial({ map: smokeTex, transparent: true, opacity: 0.32, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    const size = 5 + Math.random() * 3;
+    sprite.scale.set(size, size, 1);
+    sprite.position.set(x + (Math.random() - 0.5) * 4, y, z + (Math.random() - 0.5) * 4);
+    scene.add(sprite);
+    smokeParticles.push({
+      sprite,
+      vx: (Math.random() - 0.5) * 8,
+      vy: 8 + Math.random() * 6,
+      vz: (Math.random() - 0.5) * 8,
+      growth: 7 + Math.random() * 5, // scale units/sec — puffs balloon outward as they rise
+      life: 0.6 + Math.random() * 0.4,
+      maxLife: 1.0
+    });
+    if (smokeParticles.length > 120) {
+      const old = smokeParticles.shift();
+      scene.remove(old.sprite);
+      old.sprite.material.dispose();
+    }
+  }
+}
+function updateSmoke(dt) {
+  for (let i = smokeParticles.length - 1; i >= 0; i--) {
+    const s = smokeParticles[i];
+    s.vx *= (1 - 0.5 * dt);
+    s.vz *= (1 - 0.5 * dt);
+    s.sprite.position.x += s.vx * dt;
+    s.sprite.position.y += s.vy * dt;
+    s.sprite.position.z += s.vz * dt;
+    const newScale = s.sprite.scale.x + s.growth * dt;
+    s.sprite.scale.set(newScale, newScale, 1);
+    s.life -= dt;
+    s.sprite.material.opacity = Math.max(0, (s.life / s.maxLife) * 0.32);
+    if (s.life <= 0) {
+      scene.remove(s.sprite);
+      s.sprite.material.dispose();
+      smokeParticles.splice(i, 1);
+    }
+  }
+}
+
+function resolvePlayerPoliceCollision(police) {
+  const dx = car.x - police.x;
+  const dy = car.y - police.y;
+  const dist = Math.hypot(dx, dy) || 0.01;
+  const minDist = (Math.max(car.width, car.length) + Math.max(police.width, police.length)) * 0.32;
+  if (dist < minDist) {
+    const overlap = minDist - dist;
+    const nx = dx / dist, ny = dy / dist;
+    car.x += nx * overlap * 0.5;
+    car.y += ny * overlap * 0.5;
+    police.x -= nx * overlap * 0.5;
+    police.y -= ny * overlap * 0.5;
+
+    // Sparks at the contact point
+    const midX = (car.x + police.x) / 2, midY = (car.y + police.y) / 2;
+    spawnSparks(midX, 14, midY, 12);
+
+    const damaged = takeDamage(1);
+    if (damaged) {
+      // Police bounces hard off the player and freezes for a moment
+      const kick = 320;
+      police.vx = -nx * kick;
+      police.vy = -ny * kick;
+      police.pauseTimer = 1.0;
+      car.vx += nx * kick * 0.35;
+      car.vy += ny * kick * 0.35;
+    } else {
+      // Still in the grace window — just a soft bump, no fresh knockback
+      car.vx *= 0.6; car.vy *= 0.6;
+      police.vx *= 0.6; police.vy *= 0.6;
+    }
+  }
+}
+
+
+// Street lights & fire hydrants: a soft bump if the player clips one slowly,
+// or a proper knock-down (with a scripted fall animation) if hit above the
+// speed threshold. Toppled props stop colliding entirely — you drive over them.
+const PROP_KNOCK_SPEED = 140; // must be going at least this fast to snap the prop over
+const PROP_TOPPLE_DURATION = 0.4;
+function updateKnockableProps(dt) {
+  const carRadius = Math.max(car.width, car.length) * 0.42;
+  for (const p of knockableProps) {
+    if (p.toppled) {
+      if (p.toppleProgress < 1) {
+        p.toppleProgress = Math.min(1, p.toppleProgress + dt / PROP_TOPPLE_DURATION);
+        const eased = 1 - Math.pow(1 - p.toppleProgress, 3);
+        const ang = p.fallSign * (Math.PI / 2) * eased;
+        if (p.fallAxis === 'z') { p.group.rotation.z = ang; }
+        else { p.group.rotation.x = ang; }
+      }
+      continue; // toppled props no longer collide — drive right over them
+    }
+    const dx = car.x - p.x, dy = car.y - p.y;
+    const dist = Math.hypot(dx, dy) || 0.01;
+    const minDist = carRadius + p.radius;
+    if (dist >= minDist) continue;
+
+    const speed = Math.hypot(car.vx, car.vy);
+    if (speed > PROP_KNOCK_SPEED) {
+      p.toppled = true;
+      p.toppleProgress = 0;
+      // Falls away from the car, along whichever world axis the impact was more aligned with
+      const awayX = p.x - car.x, awayZ = p.y - car.y;
+      if (Math.abs(awayX) >= Math.abs(awayZ)) {
+        p.fallAxis = 'z';
+        p.fallSign = awayX > 0 ? -1 : 1;
+      } else {
+        p.fallAxis = 'x';
+        p.fallSign = awayZ > 0 ? 1 : -1;
+      }
+      if (p.waterMesh) p.waterMesh.visible = true;
+      spawnSparks(p.x, 8, p.y, 10);
+    } else {
+      // Too slow to knock it over — a gentle bump so the car doesn't clip through
+      const overlap = minDist - dist;
+      const nx = dx / dist, ny = dy / dist;
+      car.x += nx * overlap;
+      car.y += ny * overlap;
+      car.vx *= 0.8;
+      car.vy *= 0.8;
+    }
+  }
+}
+
+function resetGame() {
+  // Player
+  car.x = PLAYER_SPAWN_X;
+  car.y = PLAYER_SPAWN_Y;
+  car.angle = -Math.PI / 2;
+  car.vx = 0; car.vy = 0; car.speed = 0;
+  car.lean = 0;
+  car.nitroTimer = 0;
+  car.medianLeafTimer = 0;
+  jTurn.active = false;
+  jTurn.elapsed = 0;
+  jTurnIndicatorEl.style.display = 'none';
+
+  damageState.hp = MAX_DAMAGE;
+  damageState.invulnTimer = 0;
+  damageState.busted = false;
+  damageState.resetTimer = 0;
+  updateDamageUI();
+  document.getElementById('bustedOverlay').style.display = 'none';
+
+  // Police — back to the start of their own circuits, patrolling
+  for (const p of policeCars) {
+    const s = p.state;
+    s.x = s.route[0].x;
+    s.y = s.route[0].y;
+    s.angle = 0;
+    s.vx = 0; s.vy = 0; s.speed = 0;
+    s.mode = 'patrol';
+    s.routeIndex = 0;
+    s.pauseTimer = 0;
+    s.stuckTimer = 0;
+    s.medianLeafTimer = 0;
+  }
+
+  // Helicopter — despawned, ready to spawn again on the next chase
+  heli.state = 'inactive';
+  heli.opacity = 1;
+  heliGroup.visible = false;
+  spotlightMesh.visible = false;
+  for (const mat of heliMaterials) mat.opacity = 1;
+
+  // Skid marks / sparks / leaves / smoke — clear so old ones don't linger after the reset
+  for (const s of skidMeshes) { scene.remove(s.mesh); s.mesh.material.dispose(); }
+  skidMeshes.length = 0;
+  for (const s of sparkParticles) { scene.remove(s.mesh); s.mesh.material.dispose(); }
+  sparkParticles.length = 0;
+  for (const l of leafParticles) { scene.remove(l.mesh); l.mesh.material.dispose(); }
+  leafParticles.length = 0;
+  for (const s of smokeParticles) { scene.remove(s.sprite); s.sprite.material.dispose(); }
+  smokeParticles.length = 0;
+}
+
+function animate(now) {
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+
+  update(dt);
+  if (damageState.invulnTimer > 0) damageState.invulnTimer = Math.max(0, damageState.invulnTimer - dt);
+
+  if (damageState.busted) {
+    const before = Math.ceil(damageState.resetTimer);
+    damageState.resetTimer -= dt;
+    const after = Math.ceil(Math.max(0, damageState.resetTimer));
+    if (after !== before) document.getElementById('resetCountdown').textContent = after;
+    if (damageState.resetTimer <= 0) {
+      resetGame();
+    }
+  }
+
+  updateAllPolice(dt);
+  let anyChasing = false;
+  let nearestChaseDist = Infinity;
+  for (const p of policeCars) {
+    resolvePlayerPoliceCollision(p.state);
+    if (p.state.mode === 'chase') {
+      anyChasing = true;
+      const d = Math.hypot(car.x - p.state.x, car.y - p.state.y);
+      if (d < nearestChaseDist) nearestChaseDist = d;
+    }
+  }
+  updateSirenSound(anyChasing, nearestChaseDist);
+  updateKnockableProps(dt);
+
+  updateArmoredTrucks(dt);
+  for (const t of armoredTrucks) resolvePlayerArmoredTruckCollision(t);
+
+  carGroup.position.set(car.x, car.z, car.y);
+  carGroup.rotation.set(0, -car.angle, 0);
+  carGroup.rotateX(car.lean);
+  carGroup.rotateZ(car.pitch); // nose up while climbing/launching off the ramp
+
+  // Flash light bars while chasing; keep them dark during patrol
+  lightPhaseTimer += dt;
+  if (lightPhaseTimer > 0.18) {
+    lightPhaseTimer = 0;
+    lightPhase = !lightPhase;
+  }
+  for (const p of policeCars) {
+    p.group.position.set(p.state.x, 0, p.state.y);
+    p.group.rotation.set(0, -p.state.angle, 0);
+    if (p.state.mode === 'chase') {
+      p.redLight.material = lightPhase ? redOn : redOff;
+      p.blueLight.material = lightPhase ? blueOff : blueOn;
+      p.redGlow.visible = lightPhase;
+      p.blueGlow.visible = !lightPhase;
+    } else {
+      p.redLight.material = redOff;
+      p.blueLight.material = blueOff;
+      p.redGlow.visible = false;
+      p.blueGlow.visible = false;
+    }
+    // Frozen after bouncing off the player (pauseTimer > 0) reads naturally
+    // as "braking" — brighten the taillights the same way the player's do.
+    applyTaillightGlow(p.taillightMat, p.taillightGlows, p.taillightLights, p.state.pauseTimer > 0 ? 1 : 0);
+  }
+  if (heliGroup.visible) {
+    heliRedLight.material = lightPhase ? redOn : redOff;
+    heliBlueLight.material = lightPhase ? blueOff : blueOn;
+    heliRedGlow.visible = lightPhase;
+    heliBlueGlow.visible = !lightPhase;
+  } else {
+    heliRedGlow.visible = false;
+    heliBlueGlow.visible = false;
+  }
+  chaseAlertEl.style.display = anyChasing ? 'block' : 'none';
+  document.getElementById('nitroIndicator').style.display = car.nitroTimer > 0 ? 'block' : 'none';
+
+  updateHelicopter(dt, anyChasing);
+
+  updateCamera(dt);
+  updateSkidMarks(dt);
+  updateSparks(dt);
+  updateLeaves(dt);
+  updateMoneyParticles(dt);
+  updateSmoke(dt);
+
+  renderer.render(scene, camera3D);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

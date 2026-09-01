@@ -1,0 +1,2679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Loot — Top-Down Prototype</title>
+<style>
+  html,body{
+    margin:0; padding:0; overflow:hidden; background:#111; font-family:'Segoe UI',Arial,sans-serif;
+    position:fixed; inset:0; width:100%; height:100%;
+    touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+  }
+  canvas{display:block;touch-action:none;}
+  #hud{
+    position:fixed; top:10px; left:10px; color:#fff; font-size:13px;
+    background:rgba(0,0,0,0.55); padding:8px 12px; border-radius:8px;
+    line-height:1.5; pointer-events:none; user-select:none;
+  }
+  #hud .turnReady{ color:#5cff5c; font-weight:bold; }
+  #speedBarRow{ display:flex; align-items:center; gap:8px; margin-top:2px; }
+  #speedBarTrack{
+    position:relative; width:140px; height:10px; border-radius:5px;
+    background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25);
+    overflow:hidden;
+  }
+  /* thin marker at the 20% boundary between the reverse/J-turn zone (left)
+     and the forward-speed zone (right) — this is the "neutral" point */
+  #speedBarTrack::after{
+    content:''; position:absolute; left:20%; top:0; bottom:0; width:1px;
+    background:rgba(255,255,255,0.4); z-index:2;
+  }
+  #speedBarReverseFill{
+    position:absolute; top:0; height:100%; width:0%; right:80%;
+    background:#e74c3c; transition:width 0.05s linear, background-color 0.05s linear;
+  }
+  #speedBarForwardFill{
+    position:absolute; top:0; height:100%; width:0%; left:20%;
+    background:#e74c3c; transition:width 0.08s linear, background-color 0.08s linear;
+  }
+  #controls{
+    position:fixed; bottom:0; left:0; right:0; height:220px;
+    display:flex; justify-content:space-between; align-items:flex-end;
+    padding:0 18px 26px 18px; box-sizing:border-box; pointer-events:none;
+  }
+  #controlsLeft, #controlsRight{
+    display:flex; align-items:flex-end; gap:14px; pointer-events:none;
+  }
+  .pedal{
+    pointer-events:auto; width:80px; height:47.5px; border-radius:8px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    touch-action:none; user-select:none; -webkit-user-select:none;
+    font-family:'Segoe UI',Arial,sans-serif; font-weight:900; font-size:12px; letter-spacing:1px;
+    color:#fff; border:2px solid rgba(255,255,255,0.25); transition:transform 0.08s, box-shadow 0.15s;
+  }
+  .pedal:active, .pedal.pressed{ transform:scale(0.96); }
+  #brakePedal{
+    background:linear-gradient(to top, #7a1414, #3a0808 70%);
+    box-shadow:0 0 10px rgba(255,60,60,0.25);
+  }
+  #brakePedal.pressed{ background:linear-gradient(to top, #ff3b3b, #7a1414 70%); box-shadow:0 0 24px rgba(255,60,60,0.7); }
+  #accelPedal{
+    position:relative; height:95px; /* double the standard pedal height, for finer proportional resolution */
+    background:linear-gradient(to top, #145a1e, #082e0c 70%);
+    box-shadow:0 0 10px rgba(80,255,110,0.25); overflow:hidden; justify-content:flex-end; padding-bottom:6px;
+  }
+  #accelPedalFill{
+    position:absolute; left:0; right:0; bottom:0; height:0%;
+    background:linear-gradient(to top, #3bff5c, #8fffa0);
+    box-shadow:0 0 16px rgba(80,255,110,0.8); transition:none; z-index:0;
+  }
+  #accelPedal span{ position:relative; z-index:1; text-shadow:0 1px 3px rgba(0,0,0,0.6); }
+  #wheelWrap{
+    /* left:145px lines this up with gearPod's horizontal center: 18px
+       padding + 80px brake pedal + 14px gap + half of gearPod's 66px
+       width = 145px. If the pedal widths/gaps ever change, this needs
+       recomputing to match.
+       bottom:138px: gearPod's top edge sits at 26px (controls padding)
+       + 20px (gearPod margin-bottom) + 88px (gearPod height) = 134px
+       above the screen bottom. The wheel's old position (bottom:222px)
+       left an 88px gap above that; "95% closer" means only 5% of that
+       gap remains — 88*0.05=4.4px — so the wheel's new bottom sits at
+       134+4.4 ≈ 138px, just barely above the gear pod. */
+    position:fixed; bottom:138px; left:145px; transform:translateX(-50%);
+    width:100px; height:50px; overflow:hidden; pointer-events:none; z-index:6;
+  }
+  #wheelCircle{
+    position:absolute; top:0; left:5px; width:90px; height:90px; border-radius:50%;
+    background:radial-gradient(circle at 40% 35%, #3a3d42, #16171a 75%);
+    border:3px solid rgba(255,255,255,0.35);
+    box-shadow:inset 0 0 10px rgba(0,0,0,0.6);
+  }
+  #wheelCircle .hub{
+    position:absolute; left:50%; top:50%; width:20px; height:20px; margin:-10px 0 0 -10px;
+    border-radius:50%; background:rgba(255,255,255,0.15); border:2px solid rgba(255,255,255,0.35);
+  }
+  #wheelCircle .spoke{
+    position:absolute; left:50%; top:50%; width:4px; height:38px; margin:-19px 0 0 -2px;
+    background:rgba(255,255,255,0.3); border-radius:2px; transform-origin:center;
+  }
+  #wheelCircle .spoke.s1{ transform:rotate(0deg); }
+  #wheelCircle .spoke.s2{ transform:rotate(120deg); }
+  #wheelCircle .spoke.s3{ transform:rotate(240deg); }
+  #wheelCircle.turn-left{ animation:wheelTurnLeft 0.45s ease-out; }
+  #wheelCircle.turn-right{ animation:wheelTurnRight 0.45s ease-out; }
+  @keyframes wheelTurnLeft{
+    0%{ transform:rotate(0deg); }
+    35%{ transform:rotate(-38deg); }
+    100%{ transform:rotate(0deg); }
+  }
+  @keyframes wheelTurnRight{
+    0%{ transform:rotate(0deg); }
+    35%{ transform:rotate(38deg); }
+    100%{ transform:rotate(0deg); }
+  }
+  .wheelArrow{
+    position:absolute; top:14px; color:rgba(255,255,255,0.4); font-size:20px;
+    text-shadow:0 0 6px rgba(0,0,0,0.6);
+  }
+  .wheelArrow.left{ left:2px; }
+  .wheelArrow.right{ right:2px; }
+  #accelPedal.pressed{ background:linear-gradient(to top, #3bff5c, #145a1e 70%); box-shadow:0 0 24px rgba(80,255,110,0.7); }
+  #accelPedal.locked{ border-color:#ffd25c; box-shadow:0 0 18px rgba(255,210,92,0.7); }
+  #accelPedal.locked::after{
+    content:'LOCK'; position:absolute; top:2px; right:4px; font-size:8px; color:#ffd25c;
+    letter-spacing:0.5px; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,0.8);
+  }
+  #legend{
+    position:fixed; top:10px; right:10px; color:#ccc; font-size:11px; text-align:right;
+    background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:6px; pointer-events:none; max-width:200px;
+  }
+  #resetBtn{
+    position:fixed; bottom:230px; left:18px; pointer-events:auto; z-index:5;
+    background:rgba(30,30,35,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3);
+    border-radius:8px; padding:6px 12px; font-size:12px;
+  }
+  #bustedOverlay{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    flex-direction:column; background:rgba(120,0,0,0.55); z-index:50; pointer-events:none;
+  }
+  #bustedOverlay.show{ display:flex; }
+  #bustedOverlay .bustedTitle{
+    font-size:min(18vw,110px); font-weight:900; color:#fff; letter-spacing:4px;
+    text-shadow:0 0 24px rgba(0,0,0,0.8), 0 0 6px #ff2b2b; font-family:Impact,'Arial Black',sans-serif;
+  }
+  #bustedOverlay .bustedSub{ color:#ffdede; font-size:16px; margin-top:10px; }
+  #wantedBorder{
+    position:fixed; inset:0; pointer-events:none; z-index:40; display:none;
+    border:8px solid rgba(255,40,40,0.85); box-sizing:border-box;
+  }
+  #wantedBorder.show{ display:block; }
+  #nitroBtn{
+    pointer-events:auto; width:96px; height:96px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #7a4dff, #2a1a66);
+    border:3px solid rgba(180,150,255,0.6); color:#fff; font-weight:900; font-size:15px;
+    letter-spacing:1px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    box-shadow:0 0 18px rgba(122,77,255,0.55); touch-action:none; user-select:none; -webkit-user-select:none;
+    transition:transform 0.08s, box-shadow 0.15s, opacity 0.15s; font-family:'Segoe UI',Arial,sans-serif;
+  }
+  #nitroBtn:active, #nitroBtn.pressed{ transform:scale(0.92); box-shadow:0 0 30px rgba(160,120,255,0.9); }
+  #nitroBtn.unavailable{
+    background:radial-gradient(circle at 35% 30%, #555, #222); border-color:rgba(255,255,255,0.2);
+    box-shadow:none; opacity:0.65;
+  }
+  #nitroBtn.boosting{
+    background:radial-gradient(circle at 35% 30%, #b98cff, #5a2fd6);
+    box-shadow:0 0 34px rgba(180,140,255,1);
+  }
+  #nitroPips{ display:flex; gap:4px; margin-top:4px; }
+  #nitroPips .pip{ width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.25); border:1px solid rgba(255,255,255,0.4); }
+  #nitroPips .pip.filled{ background:#fff; box-shadow:0 0 5px #fff; }
+  #gearPod{
+    pointer-events:none; align-self:flex-end; margin-bottom:20px;
+    width:66px; height:88px; border-radius:12px;
+    background:rgba(20,20,24,0.8); border:2px solid rgba(255,255,255,0.25);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    box-shadow:inset 0 0 10px rgba(0,0,0,0.6); font-family:'Segoe UI',Arial,sans-serif;
+    transition:border-color 0.15s, box-shadow 0.15s;
+  }
+  #gearPod .gearArrow{ font-size:11px; color:rgba(255,255,255,0.35); line-height:1; }
+  #gearPod .gearLabel{ font-size:10px; letter-spacing:2px; color:rgba(255,255,255,0.45); margin:2px 0; }
+  #gearPod .gearValue{ font-size:26px; font-weight:900; color:#fff; line-height:1.05; }
+  #gearPod.gear-forward{ border-color:rgba(92,255,92,0.6); box-shadow:inset 0 0 10px rgba(0,0,0,0.6), 0 0 12px rgba(92,255,92,0.35); }
+  #gearPod.gear-forward .gearValue{ color:#5cff5c; }
+  #gearPod.gear-reverse{ border-color:rgba(255,92,92,0.7); box-shadow:inset 0 0 10px rgba(0,0,0,0.6), 0 0 12px rgba(255,92,92,0.4); }
+  #gearPod.gear-reverse .gearValue{ color:#ff5c5c; }
+  #gearPod.gear-neutral .gearValue{ color:#ffd25c; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="wantedBorder"></div>
+<div id="bustedOverlay">
+  <div class="bustedTitle">BUSTED</div>
+  <div class="bustedSub" id="bustedSub">Resetting in 5...</div>
+</div>
+<div id="hud">
+  <div>Heading: <b id="hHeading">N</b> &nbsp; Cell: <b id="hCell">-,-</b></div>
+  <div id="hTurn">Straight road</div>
+  <div>Police: <b id="hPolice">PATROL</b></div>
+  <div>Health — You: <b id="hPlayerHealth">100%</b> &nbsp; Cop: <b id="hPoliceHealth">100%</b></div>
+  <div id="hBackupRow" style="display:none;">Backup Cop: <b id="hBackupHealth">100%</b></div>
+  <div>Speed: <b id="hSpeed">1.00x</b> &nbsp; Gear: <b id="hGear">N</b></div>
+  <div id="speedBarRow">
+    <div id="speedBarTrack">
+      <div id="speedBarReverseFill"></div>
+      <div id="speedBarForwardFill"></div>
+    </div>
+  </div>
+  <div>Nitro: <b id="hNitro">3/3</b></div>
+  <div id="hGamepad" style="opacity:0.7;">Gamepad: not connected</div>
+</div>
+<div id="legend">Camera rotates to keep your car facing up.<br>Up/Down=accelerator, Left/Right=turn or change lane, Space=brake.<br>Left/Right while reversing = J-turn &nbsp;|&nbsp; Shift+Up/Down or W/S = shift gear &nbsp;|&nbsp; N or / = Nitro &nbsp;|&nbsp; Controller: D-pad/stick to drive, B=spin, Start=reset</div>
+<button id="resetBtn">Reset position</button>
+
+<div id="wheelWrap">
+  <div id="wheelCircle">
+    <div class="spoke s1"></div>
+    <div class="spoke s2"></div>
+    <div class="spoke s3"></div>
+    <div class="hub"></div>
+  </div>
+  <div class="wheelArrow left">&#9664;</div>
+  <div class="wheelArrow right">&#9654;</div>
+</div>
+<div id="controls">
+  <div id="controlsLeft">
+    <button id="brakePedal" class="pedal">BRAKE</button>
+    <div id="gearPod" class="gear-neutral">
+      <div class="gearArrow">&#9650;</div>
+      <div class="gearLabel">GEAR</div>
+      <div class="gearValue" id="gearValue">N</div>
+      <div class="gearArrow">&#9660;</div>
+    </div>
+  </div>
+  <div id="controlsRight">
+    <button id="accelPedal" class="pedal"><div id="accelPedalFill"></div><span>GAS</span></button>
+    <button id="nitroBtn">
+      NITRO
+      <div id="nitroPips">
+        <div class="pip filled"></div>
+        <div class="pip filled"></div>
+        <div class="pip filled"></div>
+      </div>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   MOBILE VIEWPORT LOCKDOWN
+   touch-action:none in CSS handles most of this, but iOS Safari in
+   particular can still let a drag scroll/bounce the page or trigger
+   pull-to-refresh unless the raw touch events are also intercepted.
+   This blocks any touchmove so dragging the thumbstick — or
+   anywhere else on screen — never moves the browser viewport.
+   ============================================================ */
+document.addEventListener('touchmove', (e)=>{ e.preventDefault(); }, {passive:false});
+document.addEventListener('gesturestart', (e)=>{ e.preventDefault(); }); // iOS pinch-zoom gesture
+document.addEventListener('dblclick', (e)=>{ e.preventDefault(); });     // iOS double-tap-to-zoom
+
+/* ============================================================
+   GRID MODEL
+   - World is a grid of 1-cell = 0.125 city block units.
+   - CELL_PX = pixel size of one 0.125-block cell.
+   - Each city block = 8 cells. Each road = 2 cells wide (2 lanes).
+   - 10x10 blocks => 10 blocks * 10 (block+road) + 2 (closing road) = 102 cells per axis.
+   ============================================================ */
+const CELL_PX   = 34;      // pixel size of a single 0.125-block grid cell
+// Multiplier on how fast the car's rotation animates toward its new heading
+// after a turn/spin (1.0 = matches position-movement speed; lower = the
+// car visually spins into its new heading more slowly, i.e. a "wider"-
+// feeling turn animation, even though the underlying grid snap is instant).
+const TURN_SPEED = 0.25;
+// Position/rotation animation easing rates (fraction of remaining distance
+// closed per frame) — shared top-level so both the main tick loop and the
+// fishtail-delay calculation below reference the same values.
+const POS_EASE = 0.28;
+const ANGLE_EASE = POS_EASE * TURN_SPEED;
+const BLOCK_CELLS = 8;     // cells per city block edge
+const ROAD_CELLS  = 2;     // cells per road width (2 lanes)
+const PERIOD = BLOCK_CELLS + ROAD_CELLS; // 10
+const BLOCKS = 10;
+const GRID = BLOCKS*PERIOD + ROAD_CELLS; // 102
+
+function isRoadCol(cx){ return (((cx%PERIOD)+PERIOD)%PERIOD) < ROAD_CELLS; }
+function isRoadRow(cy){ return (((cy%PERIOD)+PERIOD)%PERIOD) < ROAD_CELLS; }
+function isRoad(cx,cy){ return isRoadCol(cx) || isRoadRow(cy); }
+function inBounds(cx,cy){ return cx>=0 && cx<GRID && cy>=0 && cy<GRID; }
+
+const ORDER = ['N','E','S','W'];
+function headingVec(h){ return {N:[0,-1], E:[1,0], S:[0,1], W:[-1,0]}[h]; }
+function headingAngle(h){ return {N:0, E:Math.PI/2, S:Math.PI, W:-Math.PI/2}[h]; }
+function rotateHeading(h,dir){
+  let i = ORDER.indexOf(h);
+  i = (i + (dir==='right'?1:3)) % 4;
+  return ORDER[i];
+}
+function rightVec(dx,dy){ return [-dy,dx]; }
+
+function isInIntersectionBox(cx,cy){ return isRoadCol(cx) && isRoadRow(cy); }
+
+// True inside the 2x2 intersection box itself (both taps of it), OR one
+// grid-snap earlier — the last straight-road cell before the box, so the
+// player gets an extra snap of lead time to commit to a turn before
+// actually reaching the intersection.
+function inTurnZone(cx,cy,heading){
+  if(isInIntersectionBox(cx,cy)) return true;
+  const [dx,dy] = headingVec(heading);
+  return isRoad(cx,cy) && isInIntersectionBox(cx+dx, cy+dy);
+}
+
+// Returns the {cx,cy} of the near corner of whichever intersection box is
+// relevant to a turn right now — the box the car is standing in, or (if
+// the car is one snap early) the box it's about to enter.
+function getTurnBoxOrigin(cx,cy,heading){
+  let refCx = cx, refCy = cy;
+  if(!isInIntersectionBox(cx,cy)){
+    const [dx,dy] = headingVec(heading);
+    refCx = cx+dx; refCy = cy+dy;
+  }
+  return {
+    boxCx: refCx - (((refCx%PERIOD)+PERIOD)%PERIOD),
+    boxCy: refCy - (((refCy%PERIOD)+PERIOD)%PERIOD)
+  };
+}
+
+function laneSnap(cx,cy,heading,dir){
+  const [dx,dy] = headingVec(heading);
+  const right = rightVec(dx,dy);
+  const rl = dir==='right' ? right : [-right[0],-right[1]];
+  if(dy!==0){ // travelling vertically -> lanes differ along cx
+    const base = cx - (((cx%PERIOD)+PERIOD)%PERIOD);
+    const offset = rl[0] > 0 ? 1 : 0;
+    return {cx: base+offset, cy};
+  } else { // travelling horizontally -> lanes differ along cy
+    const base = cy - (((cy%PERIOD)+PERIOD)%PERIOD);
+    const offset = rl[1] > 0 ? 1 : 0;
+    return {cx, cy: base+offset};
+  }
+}
+
+// zoneHeading: which box the car is APPROACHING — normally the same as
+// `heading`, but callers turning while reversing pass the ACTUAL
+// direction of travel (opposite the nose) here instead, since that's
+// which intersection the car is really driving into. `heading`+`dir`
+// together determine the RESULT (new facing/lane), kept screen-relative-
+// consistent — always relative to the car's actual heading/nose, exactly
+// like an ordinary forward turn — regardless of which box was used to
+// find the intersection. Defaults to `heading` for ordinary forward
+// turns, where the two concepts are the same thing anyway.
+function tryTurn(cx,cy,heading,dir,zoneHeading){
+  if(zoneHeading==null) zoneHeading = heading;
+  if(!inTurnZone(cx,cy,zoneHeading)) return null;
+  const newHeading = rotateHeading(heading,dir);
+  const [ndx,ndy] = headingVec(newHeading);
+  const {boxCx, boxCy} = getTurnBoxOrigin(cx,cy,zoneHeading);
+  let newCx, newCy;
+  if(ndx!==0){
+    const rl = rightVec(ndx,ndy);
+    const laneOffset = rl[1] > 0 ? 1 : 0;
+    newCy = boxCy + laneOffset;
+    const colOffset = ndx > 0 ? 0 : 1;
+    newCx = boxCx + colOffset;
+  } else {
+    const rl = rightVec(ndx,ndy);
+    const laneOffset = rl[0] > 0 ? 1 : 0;
+    newCx = boxCx + laneOffset;
+    const rowOffset = ndy > 0 ? 0 : 1;
+    newCy = boxCy + rowOffset;
+  }
+  if(!inBounds(newCx,newCy) || !isRoad(newCx,newCy)) return null;
+
+  // Turns get snapped 2 extra grid-snap steps forward of the normal
+  // landing spot, forward meaning along the new heading (the direction
+  // the car faces after completing the turn) — so the car clears the
+  // corner and lands further down the new street.
+  const pushedCx = newCx + ndx*2;
+  const pushedCy = newCy + ndy*2;
+  if(inBounds(pushedCx,pushedCy) && isRoad(pushedCx,pushedCy)){
+    newCx = pushedCx; newCy = pushedCy;
+  }
+  // if the push would run off the map/road, fall back to the normal spot
+
+  return {cx:newCx, cy:newCy, heading:newHeading};
+}
+
+/* ============================================================
+   CAR STATE
+   ============================================================ */
+const SPAWN = {cx:1, cy: BLOCKS*PERIOD + ROAD_CELLS - 3, heading:'N'};
+// (cx=1 = right/east lane of the western boundary road,
+//  cy = last frontage cell of the lower-left block, heading north)
+
+const car = {
+  cx: SPAWN.cx, cy: SPAWN.cy, heading: SPAWN.heading,
+  prevCx: SPAWN.cx, prevCy: SPAWN.cy, // snapshotted each frame in tick(), for swept collision checks — see checkCollision()
+  // visual (animated/eased) state, in pixels + radians
+  vx: (SPAWN.cx+0.5)*CELL_PX, vy: (SPAWN.cy+0.5)*CELL_PX, vAngle: headingAngle(SPAWN.heading),
+  targetVx: 0, targetVy: 0, targetAngle: 0,
+  laneChangeLockTicks: 0, // grid-steps still to travel before lane-snapping is allowed again after a turn
+  downInputLockTicks: 0,  // grid-steps still to travel before Down/reverse input works again after a J-turn
+  momentumDir: null,      // 'forward' | 'backward' | null — which way the car keeps coasting after input release
+  momentumStepsLeft: 0,   // remaining auto-driven grid-steps of coast
+  momentumIntervalMultiplier: 1, // scales the coast step interval (see J-turn's boosted momentum below); 1 = normal pace
+  fishtail: null,         // { startTime, magnitude, sign } | null — active wobble, see startFishtailNow()
+  skidUntil: 0,           // performance.now() timestamp; while now<this, tire skid marks are laid down (set by spinCar180)
+  forwardHoldStartTime: null, // when the current continuous forward hold began, for the acceleration curve
+  reverseHoldStartTime: null, // when the current continuous reverse hold began — used to gauge J-turn momentum
+  nitroCharges: 3,          // remaining bank (see NITRO_MAX_CHARGES below, defined later to avoid a forward-reference here)
+  nitroActivatedAt: null,   // when the current boost started, or null if not boosting
+  nitroActiveUntil: 0,      // timestamp the current boost ends at
+  nitroCooldownUntil: 0     // can't activate again until this timestamp
+};
+car.targetVx = car.vx; car.targetVy = car.vy; car.targetAngle = car.vAngle;
+
+const POST_TURN_LANE_LOCK_TICKS = 2; // must drive this many grid-steps after a turn before switching lanes
+const POST_JTURN_DOWN_LOCK_TICKS_BASE = 2; // previous down-input lock duration, before the 1.25x below
+const POST_JTURN_DOWN_LOCK_MULT = 1.25; // requested: 1.25x its previous duration
+const POST_JTURN_DOWN_LOCK_TICKS = Math.round(POST_JTURN_DOWN_LOCK_TICKS_BASE * POST_JTURN_DOWN_LOCK_MULT); // = 3
+
+// Momentum: releasing the forward/backward input doesn't stop the car
+// immediately — it coasts a few more grid-steps in the same direction,
+// with each successive coast step taking a bit longer than the last
+// (a simple deceleration curve), before finally rolling to a stop.
+const MOMENTUM_MAX_TICKS = 4;        // how many extra grid-steps the car coasts after release
+const MOMENTUM_BASE_INTERVAL = 130;  // ms for the first coast step (matches the held-repeat pace)
+const MOMENTUM_DECAY = 0.5;          // each further coast step takes this fraction longer (decelerating)
+const MOMENTUM_MIN_INTERVAL = 50;    // safety floor so a big J-turn momentum bonus can't produce a runaway/negative interval
+const MAX_ACCEL_STEP_INTERVAL_MS = 500; // ceiling on gear/throttle-driven step interval — guarantees the car never feels stopped while the accelerator is engaged at all, even at low gear + light throttle
+let momentumNextTime = 0;
+
+// How "fast" the car is currently reversing, using the same exponential
+// approach-to-1.0 shape as forward's accel curve — but with its OWN, much
+// larger time-constant, so a J-turn triggered soon after starting to
+// reverse only carries partial momentum, while holding reverse (or
+// triggering several J-turns in a row while continuing to hold) builds
+// this fraction — and so the momentum strength — up toward full over time.
+const REVERSE_SPEED_TAU_MS = 2500;
+function reverseSpeedFraction(now){
+  if(car.reverseHoldStartTime==null) return 0;
+  const heldFor = now - car.reverseHoldStartTime;
+  return 1 - Math.exp(-heldFor/REVERSE_SPEED_TAU_MS); // 0..1
+}
+
+// Fishtail: a purely cosmetic swerve applied on top of the car's rendered
+// rotation whenever it turns or changes lanes — as if the driver briefly
+// overcorrects/counter-steers. It never touches car.cx/cy/heading or the
+// actual grid logic, only how the sprite is drawn in draw(): the whole
+// body rotates by a damped, oscillating wobble angle around a pivot near
+// the front axle (not the center), so the rear end visibly swings out
+// while the front stays close to planted — the actual "fishtail" look —
+// with no separate translation needed to fake a slide.
+const FISHTAIL_TURN_MAGNITUDE = 1.0;  // radians — bumped up substantially for a clearly "aggressive" rear slide
+const FISHTAIL_LANE_MAGNITUDE = 0.42; // radians, smaller wobble for a plain lane change (boosted proportionally)
+const FISHTAIL_DURATION_MS    = 550;  // effect is considered over after this long
+const FISHTAIL_DECAY_TAU_MS   = 220;  // exponential decay time-constant (a bit longer, so the bigger swing doesn't snap back too abruptly)
+const FISHTAIL_PERIOD_MS      = 260;  // oscillation period of the wobble (slightly slower, reads as weightier at this magnitude)
+
+// dir: 'left' | 'right' — the direction just turned/changed toward. Starts
+// immediately, alongside the turn/lane-change's own eased rotation, so
+// the two motions read as one continuous "sliding into the turn" —
+// rather than a separate wobble that plays only after the turn settles.
+function startFishtailNow(dir, magnitude){
+  // The wobble kicks counter to `dir` first (as if the rear end stepped
+  // out the opposite way), then oscillates back down to zero.
+  car.fishtail = { startTime: performance.now(), magnitude, sign: dir==='right' ? -1 : 1 };
+}
+// Returns the current wobble angle (radians) to add on top of the car's
+// normal rendered rotation, or 0 once the effect has decayed.
+function getFishtailAngle(now){
+  if(!car.fishtail) return 0;
+  const t = now - car.fishtail.startTime;
+  if(t > FISHTAIL_DURATION_MS){ car.fishtail = null; return 0; }
+  const decay = Math.exp(-t/FISHTAIL_DECAY_TAU_MS);
+  const osc = Math.cos(2*Math.PI*t/FISHTAIL_PERIOD_MS);
+  return car.fishtail.sign * car.fishtail.magnitude * decay * osc;
+}
+
+/* ------------------------------------------------------------
+   Tire skid marks — purely cosmetic, laid down on the road (in world
+   coordinates, so they stay put as the camera pans/rotates) whenever the
+   car is actively fishtailing (covers both turns and lane-changes, since
+   both already trigger the fishtail wobble) or mid-J-turn (car.skidUntil,
+   set directly by spinCar180 since a full handbrake spin doesn't
+   otherwise trigger the fishtail system but is easily the most
+   screech-worthy move in the game). Fade out and get pruned over time so
+   the array doesn't grow forever.
+   ------------------------------------------------------------ */
+let skidMarks = []; // { x, y, angle, createdAt } in world coordinates, one per tire streak
+const SKID_MARK_LIFETIME_MS = 4000;
+const SKID_MARK_SAMPLE_INTERVAL_MS = 40; // throttle spawn rate — every frame would be excessive/overlapping
+const SKID_MARK_MAX_COUNT = 400;
+let lastSkidSampleTime = -Infinity;
+
+// Rotates a local point (lx,ly) by `angle` and translates by (cx,cy) —
+// same convention the car sprite itself is drawn with (ctx.translate then
+// ctx.rotate), so a local point here lines up with where that part of the
+// car body actually renders.
+function localToWorld(cx,cy,angle, lx,ly){
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  return { x: cx + lx*cosA - ly*sinA, y: cy + lx*sinA + ly*cosA };
+}
+
+function spawnSkidMarks(now){
+  if(now - lastSkidSampleTime < SKID_MARK_SAMPLE_INTERVAL_MS) return;
+  lastSkidSampleTime = now;
+  const carW = CELL_PX*0.9, carL = CELL_PX*1.6;
+  // rear-inboard tire positions, in the car's own local coordinate space
+  // (front is -y, rear is +y — same convention the car sprite uses)
+  const left  = localToWorld(car.vx, car.vy, car.vAngle, -carW*0.32, carL*0.4);
+  const right = localToWorld(car.vx, car.vy, car.vAngle,  carW*0.32, carL*0.4);
+  skidMarks.push({x:left.x,  y:left.y,  angle:car.vAngle, createdAt:now});
+  skidMarks.push({x:right.x, y:right.y, angle:car.vAngle, createdAt:now});
+  if(skidMarks.length > SKID_MARK_MAX_COUNT) skidMarks.splice(0, skidMarks.length-SKID_MARK_MAX_COUNT);
+}
+
+// Called once per frame from draw(), already inside the world transform
+// (see draw()'s single ctx.translate/rotate setup), so marks are drawn
+// directly in raw world coordinates like everything else there.
+function drawSkidMarks(now){
+  for(let i=skidMarks.length-1; i>=0; i--){
+    const m = skidMarks[i];
+    const age = now - m.createdAt;
+    if(age > SKID_MARK_LIFETIME_MS){ skidMarks.splice(i,1); continue; }
+    const alpha = 0.45 * (1 - age/SKID_MARK_LIFETIME_MS);
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.rotate(m.angle);
+    ctx.fillStyle = `rgba(15,15,15,${alpha.toFixed(3)})`;
+    ctx.fillRect(-2.5, -6, 5, 12); // short streak along the car's forward axis
+    ctx.restore();
+  }
+}
+
+/* ------------------------------------------------------------
+   Pickups — nitro refill and vehicle repair, placed randomly on the
+   road network. One of each is active on the map at a time; driving
+   over one collects it and a replacement spawns elsewhere after a
+   short delay, so the map never permanently runs dry.
+   ------------------------------------------------------------ */
+const PICKUP_RADIUS_CELLS = 1.2; // a bit more forgiving than exact-overlap, easier to grab while driving
+const PICKUP_RESPAWN_DELAY_MS = 4000;
+const PICKUP_MIN_DIST_FROM_PLAYER = 15; // don't respawn right next to the player for a free instant re-grab
+const REPAIR_HEAL_AMOUNT = 50; // percentage points restored — a meaningful repair, not necessarily a full heal
+
+let pickups = [];         // { type:'nitro'|'repair', cx, cy }
+let pendingRespawns = []; // { type, respawnAt }
+
+// Picks a random ROAD cell (never inside a building), retrying until one
+// is found that's also at least PICKUP_MIN_DIST_FROM_PLAYER from the
+// player's current position (falls back to any road cell if that proves
+// hard to satisfy, so this can never infinite-loop or fail to spawn).
+function randomPickupCell(){
+  let best = null, bestDist = -1;
+  for(let attempt=0; attempt<200; attempt++){
+    const cx = Math.floor(Math.random()*GRID);
+    const cy = Math.floor(Math.random()*GRID);
+    if(!isRoad(cx,cy)) continue;
+    const d = cellDistance(cx,cy, car.cx,car.cy);
+    if(d >= PICKUP_MIN_DIST_FROM_PLAYER) return {cx,cy};
+    if(d > bestDist){ bestDist = d; best = {cx,cy}; } // remember the best candidate in case none clear the distance bar
+  }
+  return best || {cx:1, cy:1}; // extremely unlikely fallback
+}
+
+function spawnPickup(type){
+  const pos = randomPickupCell();
+  pickups.push({type, cx:pos.cx, cy:pos.cy});
+}
+spawnPickup('nitro');
+spawnPickup('repair');
+
+function collectPickup(pickup, now){
+  if(pickup.type==='nitro'){
+    car.nitroCharges = Math.min(NITRO_MAX_CHARGES, car.nitroCharges+1);
+  } else if(pickup.type==='repair'){
+    car.health = Math.min(MAX_HEALTH, car.health+REPAIR_HEAL_AMOUNT);
+  }
+  pendingRespawns.push({type:pickup.type, respawnAt: now+PICKUP_RESPAWN_DELAY_MS});
+}
+
+function updatePickups(now){
+  for(let i=pickups.length-1; i>=0; i--){
+    const p = pickups[i];
+    if(cellDistance(p.cx,p.cy, car.cx,car.cy) <= PICKUP_RADIUS_CELLS){
+      collectPickup(p, now);
+      pickups.splice(i,1);
+    }
+  }
+  for(let i=pendingRespawns.length-1; i>=0; i--){
+    if(now >= pendingRespawns[i].respawnAt){
+      spawnPickup(pendingRespawns[i].type);
+      pendingRespawns.splice(i,1);
+    }
+  }
+}
+
+function drawPickups(now){
+  for(const p of pickups){
+    const wx = (p.cx+0.5)*CELL_PX, wy = (p.cy+0.5)*CELL_PX;
+    const pulse = 0.5 + 0.5*Math.sin(now/300);
+    const r = 10 + pulse*3;
+    ctx.save();
+    ctx.translate(wx, wy);
+    if(p.type==='nitro'){
+      ctx.shadowColor = 'rgba(160,120,255,0.9)'; ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgba(122,77,255,0.9)';
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 13px Segoe UI, Arial, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('N', 0, 1);
+    } else {
+      ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#e02020';
+      ctx.fillRect(-2, -7, 4, 14);
+      ctx.fillRect(-7, -2, 14, 4);
+    }
+    ctx.restore();
+  }
+}
+
+function resetCar(){
+  car.cx = SPAWN.cx; car.cy = SPAWN.cy; car.heading = SPAWN.heading;
+  car.prevCx = car.cx; car.prevCy = car.cy; // avoid a false swept-collision "jump" from the pre-reset position
+  car.vx = car.targetVx = (car.cx+0.5)*CELL_PX;
+  car.vy = car.targetVy = (car.cy+0.5)*CELL_PX;
+  car.vAngle = car.targetAngle = headingAngle(car.heading);
+  if(typeof camAngle!=='undefined') camAngle = car.vAngle; // snap the camera's lag instantly too, no catch-up spin from the pre-reset angle
+  car.laneChangeLockTicks = 0;
+  car.downInputLockTicks = 0;
+  car.momentumDir = null;
+  car.momentumStepsLeft = 0;
+  car.momentumIntervalMultiplier = 1;
+  car.fishtail = null;
+  car.skidUntil = 0;
+  skidMarks = [];
+  car.forwardHoldStartTime = null;
+  car.reverseHoldStartTime = null;
+  car.nitroCharges = NITRO_MAX_CHARGES;
+  car.nitroActivatedAt = null;
+  car.nitroActiveUntil = 0;
+  car.nitroCooldownUntil = 0;
+  if(typeof currentGear!=='undefined'){
+    currentGear = 0; throttleValue = 0; brakeValue = 0; gpThrottlePrevHeld = false;
+    gpGearRevGear = null; gpGearRevStartTime = null; gpGearFullSince = null;
+    brakeStoppedSince = null; brakeAutoReversing = false;
+  }
+  if(typeof keyboardThrottleLevel!=='undefined') keyboardThrottleLevel = 0;
+}
+document.getElementById('resetBtn').addEventListener('click', resetCar);
+
+const nitroBtn = document.getElementById('nitroBtn');
+nitroBtn.addEventListener('pointerdown', (e)=>{
+  e.preventDefault();
+  activateNitro(performance.now());
+  nitroBtn.classList.add('pressed');
+});
+['pointerup','pointerleave','pointercancel'].forEach(evt=>{
+  nitroBtn.addEventListener(evt, ()=> nitroBtn.classList.remove('pressed'));
+});
+
+// Raw grid-step movers — no momentum side effects. Used both by direct
+// input (moveForward/moveBackward below) and by the momentum coast itself,
+// so a coast step doesn't re-trigger/refresh its own momentum.
+function moveForwardCell(){
+  const [dx,dy] = headingVec(car.heading);
+  const ncx = car.cx+dx, ncy = car.cy+dy;
+  if(!inBounds(ncx,ncy) || !isRoad(ncx,ncy)) return false;
+  car.cx = ncx; car.cy = ncy;
+  if(car.laneChangeLockTicks>0) car.laneChangeLockTicks--;
+  if(car.downInputLockTicks>0) car.downInputLockTicks--;
+  syncTarget();
+  return true;
+}
+function moveBackwardCell(){
+  const [dx,dy] = headingVec(car.heading);
+  const ncx = car.cx-dx, ncy = car.cy-dy;
+  if(!inBounds(ncx,ncy) || !isRoad(ncx,ncy)) return false;
+  car.cx = ncx; car.cy = ncy;
+  if(car.laneChangeLockTicks>0) car.laneChangeLockTicks--;
+  if(car.downInputLockTicks>0) car.downInputLockTicks--;
+  syncTarget();
+  return true;
+}
+function moveForward(){
+  // input-triggered forward step: also (re)arms momentum so releasing
+  // the input right after this still coasts a few more steps
+  if(moveForwardCell()){
+    car.momentumDir = 'forward';
+    car.momentumStepsLeft = MOMENTUM_MAX_TICKS;
+    car.momentumIntervalMultiplier = 1; // normal driving uses the standard coast pace (only a J-turn boosts this)
+    return true;
+  }
+  return false; // blocked — world edge, or otherwise couldn't advance
+}
+
+// Called whenever a forward-driving input tries to move but can't (world
+// boundary, or having failed to turn at a dead end) — the car has
+// effectively stalled against something. Drops it back to 1st gear and
+// resets every acceleration-curve/rev-progress tracker (keyboard,
+// gamepad, and touch pedal alike) so continuing to hold the accelerator
+// builds speed up from a standstill again, same as it would from a fresh
+// start, rather than picking up wherever the old curve left off. Also
+// kills any residual momentum, since a car that just hit a wall isn't
+// still coasting.
+function stallForwardDrive(now){
+  if(currentGear <= 0) return; // only relevant while actually in a forward gear
+  currentGear = 1;
+  car.forwardHoldStartTime = now; // restart the keyboard muscle-car curve from zero, even if still held
+  gpGearRevGear = null; gpGearRevStartTime = null; gpGearFullSince = null; // restart the gamepad/pedal rev curve from zero
+  car.momentumDir = null; car.momentumStepsLeft = 0;
+}
+function moveBackward(){
+  if(car.downInputLockTicks>0) return; // Down/reverse is locked out for a few grid-steps after a J-turn
+  // reverse: moves opposite of current heading, without changing heading/rotation
+  if(moveBackwardCell()){
+    car.momentumDir = 'backward';
+    car.momentumStepsLeft = MOMENTUM_MAX_TICKS;
+    car.momentumIntervalMultiplier = 1;
+  }
+}
+
+// Called once per animation frame. Only auto-drives a coast step when the
+// player ISN'T currently actively holding the matching direction (while
+// they're holding it, the ordinary hold-repeat pipeline is already moving
+// the car, and every one of those moves re-arms momentum anyway).
+function updateMomentum(now){
+  if(gameState==='BUSTED' || !car.momentumDir) return;
+  const activelyDriving = (car.momentumDir==='forward' && holds.N && holds.N.held)
+                        || (car.momentumDir==='backward' && holds.S && holds.S.held);
+  if(activelyDriving) return;
+  if(car.momentumStepsLeft<=0){ car.momentumDir=null; return; }
+  if(now < momentumNextTime) return;
+  // stepIndex can go negative when a J-turn grants MORE steps than the
+  // normal MOMENTUM_MAX_TICKS baseline (see spinCar180) — clamped so the
+  // interval formula can't produce a runaway-fast or negative interval.
+  const stepIndex = MOMENTUM_MAX_TICKS - car.momentumStepsLeft; // 0-based: which coast step is this
+  const interval = Math.max(MOMENTUM_MIN_INTERVAL,
+    MOMENTUM_BASE_INTERVAL*car.momentumIntervalMultiplier*(1 + stepIndex*MOMENTUM_DECAY));
+  momentumNextTime = now + interval;
+  const moved = car.momentumDir==='forward' ? moveForwardCell() : moveBackwardCell();
+  car.momentumStepsLeft--;
+  if(!moved || car.momentumStepsLeft<=0) car.momentumDir=null;
+}
+
+// J-turn momentum: at low reverse speed, still keep a small guaranteed
+// amount of momentum (it was still real motion); the closer to top speed
+// the player was reversing, the more extra momentum carries through.
+const J_TURN_MOMENTUM_BASE = 2;      // guaranteed coast steps even at low speed
+const J_TURN_MOMENTUM_BONUS_MAX = 5; // additional coast steps at full (100% of top) speed
+const J_TURN_MOMENTUM_STRENGTH_MULT = 1.5; // requested: momentum is 1.5x as strong (more coast steps)...
+const J_TURN_MOMENTUM_DURATION_MULT = 1.5; // ...and lasts 1.5x as long (each coast step's interval stretched out)
+
+// dir: 'left' | 'right' — which way to spin. Both directions land on the
+// exact same FINAL heading (180° either way), but the visual rotation
+// itself (and, via startFishtailNow elsewhere, the wobble direction) now
+// actually matches whichever way the player pressed, instead of always
+// spinning the same fixed way regardless of input.
+// speedFraction: 0..1, how close to top speed the car was travelling
+// (in reverse) at the moment the J-turn fired — see reverseSpeedFraction().
+// Shared by both J-turn variants (the straight-road 180 spin, and turning
+// at an intersection while reversing): transitions the car from
+// reversing to driving FORWARD in its (already-updated) new heading,
+// carrying momentum through based on how "fast" it was reversing
+// (reverseSpeedFraction), and applies a brief reverse-input lock so the
+// player can't immediately yank it back into reverse and cancel the
+// momentum just granted.
+function applyReverseRecoveryMomentum(speedFraction){
+  car.momentumDir = 'forward';
+  const baseSteps = J_TURN_MOMENTUM_BASE + Math.round(J_TURN_MOMENTUM_BONUS_MAX*speedFraction);
+  car.momentumStepsLeft = Math.round(baseSteps * J_TURN_MOMENTUM_STRENGTH_MULT); // 1.5x stronger
+  car.momentumIntervalMultiplier = J_TURN_MOMENTUM_DURATION_MULT; // 1.5x longer-lasting (slower coast decay)
+  momentumNextTime = performance.now() + MOMENTUM_BASE_INTERVAL*car.momentumIntervalMultiplier; // start the coast promptly, at the stretched pace
+  car.downInputLockTicks = POST_JTURN_DOWN_LOCK_TICKS;
+  // The car is now driving FORWARD — but currentGear isn't touched by
+  // whatever set momentumDir='forward' above, so if this was triggered
+  // via the gear system's Reverse (currentGear===-1), it would
+  // incorrectly stay at -1 even though the car is no longer reversing.
+  // Left uncorrected, a quick next left/right press would misread that
+  // stale Reverse gear as "still reversing" and fire another recovery
+  // immediately. Snapping to 1st matches both the actual new motion and
+  // the same "gear resets to 1st" convention used elsewhere (e.g. after
+  // stalling against a wall).
+  if(typeof currentGear!=='undefined') currentGear = 1;
+}
+
+function spinCar180(dir, speedFraction){
+  if(dir!=='left' && dir!=='right') dir = 'right'; // direction-agnostic callers (e.g. the gamepad's dedicated spin button)
+  if(speedFraction==null) speedFraction = 0; // e.g. the gamepad's instant spin button, no charge-up to measure
+  // handbrake U-turn: flip heading in place, spinning the way `dir` says...
+  const newHeading = rotateHeading(rotateHeading(car.heading,dir),dir);
+  // ...but land in the OPPOSITE physical lane, not the same one. Right-
+  // hand-traffic lane assignment always flips sides between a heading and
+  // its opposite (verified: N's right lane is offset1, S's right lane is
+  // offset0, and the same pattern holds for E/W) — so snapping to the
+  // "right" lane for the NEW heading naturally puts the car on the
+  // opposite side of the road from wherever it was, which is exactly a
+  // real bootleg/J-turn: you don't end up straddling the same lane you
+  // were just backing down, you land correctly in traffic for the new
+  // direction, which happens to be the far side of the road.
+  const snapped = laneSnap(car.cx, car.cy, newHeading, 'right');
+  car.cx = snapped.cx; car.cy = snapped.cy;
+  car.heading = newHeading;
+  applyReverseRecoveryMomentum(speedFraction);
+  car.skidUntil = performance.now() + 500; // full handbrake spin — definitely tire-screech-worthy, see spawnSkidMarks()
+  syncTarget();
+}
+function pressLeftRight(dir){
+  // "Reversing" covers both the gear-system's Reverse (currentGear===-1,
+  // used by gamepad/pedal/brake-auto-reverse) and plain keyboard
+  // reversing, which never touches the gear system but always leaves
+  // momentumDir as 'backward'.
+  const reversing = currentGear===-1 || car.momentumDir==='backward';
+  // travelHeading is the car's ACTUAL direction of travel while
+  // reversing (opposite the nose) — used ONLY to find which intersection
+  // box the car is really approaching (getTurnBoxOrigin/inTurnZone), since
+  // that's a genuinely different concept from "which way is left/right".
+  // "left/right" itself always stays relative to car.heading (the nose) —
+  // exactly the same convention an ordinary forward turn already uses,
+  // and verified to always match whatever's actually drawn on the
+  // player's screen-left/right, regardless of heading. Conflating the two
+  // (using travelHeading for BOTH) was the bug: it made the resulting
+  // turn direction disagree with the input, since dir's meaning should
+  // never depend on which way the car happens to be facing vs moving.
+  const travelHeading = reversing ? oppositeHeading(car.heading) : car.heading;
+
+  if(inTurnZone(car.cx,car.cy,travelHeading)){
+    // Always a normal 90-degree turn here, whether driving forward or in
+    // reverse — being at an actual intersection means "turn", NEVER a
+    // J-turn (spinCar180 is exclusively for the straight-road case
+    // below, where there's no corner to actually turn at — see the
+    // `reversing` branch further down, which only runs once we've
+    // already confirmed we're NOT in a turn zone).
+    const t = tryTurn(car.cx,car.cy,car.heading,dir,travelHeading);
+    if(t){
+      car.cx=t.cx; car.cy=t.cy;
+      // t.heading is relative to car.heading (the nose) — dir='right'
+      // always means the same thing it means for a normal forward turn.
+      // While reversing, flip it so the car's nose points AWAY from
+      // that result, continuing to reverse through the turn onto the
+      // new road — its ACTUAL motion (opposite the nose) ends up being
+      // t.heading itself, i.e. exactly the direction dir/screen-right
+      // pointed to. Gear/momentum are otherwise untouched — this is a
+      // turn, not a recovery maneuver.
+      car.heading = reversing ? oppositeHeading(t.heading) : t.heading;
+      car.laneChangeLockTicks = POST_TURN_LANE_LOCK_TICKS; // lock out lane-switching until 2 grid-steps have been driven
+      syncTarget();
+      startFishtailNow(dir, FISHTAIL_TURN_MAGNITUDE); // starts immediately, alongside the turn's own rotation — not delayed until it settles
+      playWheelTurnAnimation(dir);
+    }
+    return;
+  }
+  // Trying to change lanes while driving in reverse, on an ordinary
+  // straight stretch (not at an intersection — the branch above already
+  // handled and returned for that case, so reaching here guarantees
+  // we're NOT in a turn zone) — this is what triggers the J-turn.
+  if(reversing){
+    spinCar180(dir, reverseSpeedFraction(performance.now()));
+    return;
+  }
+  // only allow the plain lane-snap on a straight road stretch (not mid-intersection)
+  if(isRoadCol(car.cx) && isRoadRow(car.cy)) return; // inside an intersection box, no-op
+  if(car.laneChangeLockTicks>0) return; // still within the post-turn lock window — ignore lane-change commands
+  const s = laneSnap(car.cx,car.cy,car.heading,dir);
+  // laneSnap always returns SOME valid lane cell for the given direction —
+  // including the car's own current cell, if it's already in that lane
+  // (e.g. pressing "right" again while already in the right lane). That
+  // still passes the isRoad/inBounds check below, so without explicitly
+  // requiring the position to actually be DIFFERENT, this would fire the
+  // fishtail/wheel animations for a lane "change" that never happened.
+  const actuallyChanged = s.cx!==car.cx || s.cy!==car.cy;
+  if(actuallyChanged && inBounds(s.cx,s.cy) && isRoad(s.cx,s.cy)){
+    car.cx=s.cx; car.cy=s.cy;
+    syncTarget();
+    startFishtailNow(dir, FISHTAIL_LANE_MAGNITUDE);
+    playWheelTurnAnimation(dir);
+  }
+}
+
+// Steering wheel UI feedback: purely reactive/decorative (the actual
+// input for turning is the swipe surface / keyboard / gamepad, handled
+// elsewhere) — plays a quick snap-and-return rotation every time a turn
+// or lane-change actually succeeds, regardless of which input method
+// triggered it, since they all funnel through pressLeftRight() above.
+function playWheelTurnAnimation(dir){
+  const el = document.getElementById('wheelCircle');
+  if(!el) return;
+  const cls = dir==='right' ? 'turn-right' : 'turn-left';
+  // restart the animation even if one's already mid-flight (e.g. rapid
+  // successive turns) by removing and re-adding the class on the next frame
+  el.classList.remove('turn-left','turn-right');
+  void el.offsetWidth; // force reflow so the class removal actually takes effect before re-adding
+  el.classList.add(cls);
+}
+
+// World-relative control resolver: `dir` is an absolute compass direction
+// (N/E/S/W), matching what the arrow key / on-screen button visually
+// points to on screen — NOT relative to the car's current heading.
+// - same as current heading      -> drive forward
+// - opposite of current heading  -> drive backward
+// - 90 degrees off (either side) -> turn (if near an intersection) or
+//                                    lane-snap (if on a straight stretch),
+//                                    reusing the existing car-relative logic
+function oppositeHeading(h){ return rotateHeading(rotateHeading(h,'right'),'right'); }
+function absoluteAction(dir){
+  if(dir===car.heading){ if(!moveForward()) stallForwardDrive(performance.now()); return; }
+  if(dir===oppositeHeading(car.heading)){ moveBackward(); return; }
+  if(dir===rotateHeading(car.heading,'right')){ pressLeftRight('right'); return; }
+  if(dir===rotateHeading(car.heading,'left')){ pressLeftRight('left'); return; }
+}
+
+function syncTarget(){
+  syncEntityTarget(car);
+}
+// Move-ease bounds used by the dynamic per-step ease rate below — clamps
+// out pathological cases (a near-zero observed gap making the next glide
+// absurdly snappy, or a long real-world pause like a tab-switch making it
+// absurdly slow) without affecting the normal range of speeds.
+const MOVE_EASE_MIN_INTERVAL_MS = 40;
+const MOVE_EASE_MAX_INTERVAL_MS = 1200;
+function syncEntityTarget(entity){
+  entity.targetVx = (entity.cx+0.5)*CELL_PX;
+  entity.targetVy = (entity.cy+0.5)*CELL_PX;
+  // Dynamic position-ease rate: a FIXED ease rate (the old approach)
+  // converges to the target in a fixed ~150ms no matter how far apart in
+  // time the actual grid-steps are. That's fine at high speed (steps
+  // arrive faster than that convergence window, so motion looks
+  // continuous) but at low speed the car fully catches up within ~150ms
+  // and then sits completely motionless for the rest of the — possibly
+  // multi-second — gap until the next step, which reads as a tick/snap
+  // rather than smooth motion. Deriving the rate from the OBSERVED
+  // interval since the last move (assuming the next gap will be roughly
+  // similar) spreads the glide across the WHOLE interval instead,
+  // whatever that happens to be, so it looks continuous at any speed.
+  const now = performance.now();
+  const observedInterval = entity.lastMoveTime ? (now - entity.lastMoveTime) : MOVE_EASE_MIN_INTERVAL_MS;
+  entity.lastMoveTime = now;
+  const clamped = Math.max(MOVE_EASE_MIN_INTERVAL_MS, Math.min(MOVE_EASE_MAX_INTERVAL_MS, observedInterval));
+  const frames = clamped / (1000/60);
+  entity.moveEaseRate = 1 - Math.pow(0.05, 1/frames); // ~95% converged by the time `clamped` elapses
+  // choose nearest equivalent angle so the car doesn't spin the long way around
+  let target = headingAngle(entity.heading);
+  let cur = entity.vAngle;
+  let diff = target - cur;
+  while(diff > Math.PI) diff -= Math.PI*2;
+  while(diff < -Math.PI) diff += Math.PI*2;
+  entity.targetAngle = cur + diff;
+}
+
+/* ============================================================
+   POLICE AI — state machine
+   Uses the exact same grid rules the player uses (isRoad, inBounds,
+   inTurnZone, tryTurn) for every state — it just decides on its own
+   when to go straight vs. turn, instead of reading input.
+
+   States:
+     PATROL  - scripted clockwise loop around the 3x3 upper-left block
+               area; scans straight ahead for the player each tick.
+     PURSUIT - 1.5x speed, greedily steers toward the player's cell.
+     SEARCH  - player got away (>2 blocks); keeps driving straight in
+               the current heading for 4 blocks, only turning (randomly)
+               if it hits the edge of the map.
+     RETURN  - 1.0x speed, greedily steers back toward the patrol spawn
+               point; re-scans for the player the whole way back.
+   Global gameState handles the BUSTED collision/cooldown/reset flow
+   (separate from police.state since it also freezes player input).
+   ============================================================ */
+const PATROL_BLOCKS = 3; // 3x3 blocks in the upper-left corner
+const PATROL_SPAN = PATROL_BLOCKS * PERIOD; // = 30 cells to the far corner boxes
+// the 4 corner intersection boxes of the loop, in clockwise order
+const PATROL_CORNERS = [
+  {boxCx: PATROL_SPAN, boxCy: 0},            // NE corner
+  {boxCx: PATROL_SPAN, boxCy: PATROL_SPAN},  // SE corner
+  {boxCx: 0,            boxCy: PATROL_SPAN}, // SW corner
+  {boxCx: 0,            boxCy: 0}            // NW corner (back to start)
+];
+
+// spawn just past the NW corner box, heading east along the top edge,
+// already in the correct right-hand lane for eastbound travel
+const POLICE_SPAWN = {cx: 2, cy: 1, heading: 'E'};
+
+const LOS_RANGE_CELLS    = 2 * BLOCK_CELLS; // "can see 2 blocks in front"
+const CHASE_LOSE_CELLS   = 2 * BLOCK_CELLS; // ">2 blocks distance away" breaks pursuit
+const SEARCH_TRAVEL_CELLS = 4 * BLOCK_CELLS; // travels 4 blocks before heading home
+const COLLISION_CELLS    = 1;               // how close counts as a collision
+const BUSTED_COOLDOWN_MS = 5000;
+
+// Health system: collisions damage both vehicles instead of instantly
+// busting the player. The vehicle that got HIT harder is whichever one
+// was rammed — the initiator takes only minor damage, the one that got
+// hit takes heavy damage. Percentages are of each vehicle's own max health.
+const MAX_HEALTH = 100;
+const RAM_DAMAGE_TO_VICTIM = 25;   // % of max health lost by whichever car got hit
+const RAM_DAMAGE_TO_RAMMER = 5;    // % of max health lost by whichever car did the hitting
+const COLLISION_KNOCKBACK_CELLS = 2; // how far apart, in grid-steps, both cars get bumped
+const POLICE_RESPAWN_COOLDOWN_MS = 5000;
+
+const POLICE_BASE_INTERVAL = 260; // ms/step at 1.0x (matches patrol pace)
+
+// Cop top speed & acceleration constants (COP_MAX_SPEED_MULTIPLIER,
+// COP_ACCEL_TAU_MS) are defined further down, right after the player's
+// own MAX_SPEED_MULTIPLIER/ACCEL_TAU_MS (which they derive from) — see
+// the INPUT section below. copSpeedMultiplier() itself is safe to define
+// here since, as a function body, it isn't evaluated until called (by
+// which point the whole script has finished loading).
+//
+// Returns the cop's current speed multiplier: 1.0x outside of PURSUIT,
+// ramping up toward COP_MAX_SPEED_MULTIPLIER the longer it's been
+// continuously pursuing (unit.pursuitHoldStartTime is set on entering
+// PURSUIT and cleared on leaving it — see enterPursuit()/spawnBackupCop()).
+function copSpeedMultiplier(unit, now){
+  if(unit.state!=='PURSUIT' || unit.pursuitHoldStartTime==null) return 1.0;
+  const heldFor = now - unit.pursuitHoldStartTime;
+  return 1 + (COP_MAX_SPEED_MULTIPLIER-1)*(1 - Math.exp(-heldFor/COP_ACCEL_TAU_MS));
+}
+
+const police = {
+  cx: POLICE_SPAWN.cx, cy: POLICE_SPAWN.cy, heading: POLICE_SPAWN.heading,
+  prevCx: POLICE_SPAWN.cx, prevCy: POLICE_SPAWN.cy, // snapshotted each frame in tick(), for swept collision checks
+  state: 'PATROL',
+  targetCornerIndex: 0,     // PATROL: index into PATROL_CORNERS driving toward
+  searchCellsRemaining: 0,  // SEARCH: cells left to travel before returning
+  health: MAX_HEALTH,
+  despawned: false,         // true while waiting out POLICE_RESPAWN_COOLDOWN_MS after health hits 0
+  pursuitHoldStartTime: null, // when the current continuous PURSUIT began, for the accel curve
+  lastCollisionAt: -Infinity,
+  collisionArmed: true, // false right after a hit, until the cars actually separate — see checkCollision()
+  vx: (POLICE_SPAWN.cx+0.5)*CELL_PX, vy: (POLICE_SPAWN.cy+0.5)*CELL_PX, vAngle: headingAngle(POLICE_SPAWN.heading),
+  targetVx: 0, targetVy: 0, targetAngle: 0
+};
+police.targetVx = police.vx; police.targetVy = police.vy; police.targetAngle = police.vAngle;
+
+// Backup unit: spawned mid-game (see spawnBackupCop()) rather than present
+// from the start — "active" gates everything about it (AI updates,
+// collision checks, rendering). Unlike the primary patrol car, it has no
+// patrol loop of its own: it only ever drives PURSUIT, and if it loses
+// the chase or gets its health knocked to 0, it simply deactivates for
+// good (no respawn timer) rather than returning to a patrol route it was
+// never part of. At most one can be active at a time.
+const police2 = {
+  active: false,
+  cx: 0, cy: 0, heading: 'N',
+  prevCx: 0, prevCy: 0, // snapshotted each frame in tick(), for swept collision checks
+  state: 'PURSUIT',
+  health: MAX_HEALTH,
+  pursuitHoldStartTime: null,
+  lastCollisionAt: -Infinity,
+  collisionArmed: true, // false right after a hit, until the cars actually separate — see checkCollision()
+  nextStepTime: 0,
+  vx: 0, vy: 0, vAngle: 0, targetVx: 0, targetVy: 0, targetAngle: 0
+};
+
+car.health = MAX_HEALTH; // player health lives on the existing car object
+
+let policeNextStepTime = 0;
+let policeDespawnAt = 0;
+let gameState = 'RUNNING'; // 'RUNNING' | 'BUSTED'
+let bustedAt = 0;
+
+function cellDistance(ax,ay,bx,by){ return Math.hypot(ax-bx, ay-by); }
+
+// Line-of-sight: player must be in the same road-lane strip the police is
+// facing along, ahead of it (not behind), within LOS_RANGE_CELLS. Since
+// buildings only occupy non-road cells, requiring the player to share the
+// same road strip automatically means buildings can't be "seen through" —
+// a player on a different street is on a different strip entirely.
+function canSeePlayer(entity){
+  const [dx,dy] = headingVec(entity.heading);
+  if(dy!==0){
+    const eBase = Math.floor(entity.cx/PERIOD)*PERIOD;
+    const pBase = Math.floor(car.cx/PERIOD)*PERIOD;
+    if(eBase!==pBase) return false;
+    const ahead = dy>0 ? (car.cy-entity.cy) : (entity.cy-car.cy);
+    return ahead>0 && ahead<=LOS_RANGE_CELLS;
+  } else {
+    const eBase = Math.floor(entity.cy/PERIOD)*PERIOD;
+    const pBase = Math.floor(car.cy/PERIOD)*PERIOD;
+    if(eBase!==pBase) return false;
+    const ahead = dx>0 ? (car.cx-entity.cx) : (entity.cx-car.cx);
+    return ahead>0 && ahead<=LOS_RANGE_CELLS;
+  }
+}
+
+function desiredHeadingToward(fromCx,fromCy,toCx,toCy,currentHeading){
+  const dcx = toCx-fromCx, dcy = toCy-fromCy;
+  if(Math.abs(dcx) > Math.abs(dcy)) return dcx>0 ? 'E' : 'W';
+  if(Math.abs(dcy) > 0) return dcy>0 ? 'S' : 'N';
+  return currentHeading;
+}
+
+// Greedy nav: turns toward the target at intersections, otherwise drives
+// straight. Returns true if it moved/turned this tick.
+function stepToward(entity, targetCx, targetCy){
+  if(inTurnZone(entity.cx, entity.cy, entity.heading)){
+    const desired = desiredHeadingToward(entity.cx, entity.cy, targetCx, targetCy, entity.heading);
+    if(desired !== entity.heading){
+      let dir = rotateHeading(entity.heading,'right')===desired ? 'right'
+              : rotateHeading(entity.heading,'left')===desired  ? 'left'
+              : (Math.random()<0.5 ? 'left' : 'right'); // 180-degree case: pick a side
+      let t = tryTurn(entity.cx, entity.cy, entity.heading, dir)
+           || tryTurn(entity.cx, entity.cy, entity.heading, dir==='left'?'right':'left');
+      if(t){ entity.cx=t.cx; entity.cy=t.cy; entity.heading=t.heading; syncEntityTarget(entity); return true; }
+    }
+  }
+  const [dx,dy] = headingVec(entity.heading);
+  const ncx = entity.cx+dx, ncy = entity.cy+dy;
+  if(inBounds(ncx,ncy) && isRoad(ncx,ncy)){
+    entity.cx = ncx; entity.cy = ncy; syncEntityTarget(entity); return true;
+  }
+  return false;
+}
+
+// Straight-line driving for the SEARCH state: keeps going in the current
+// heading through ordinary intersections, only turning (randomly) when
+// blocked outright by the edge of the map. Returns cells advanced (a
+// turn counts as 2, matching the turn's forward push).
+function stepStraightOrRandomTurn(entity){
+  const [dx,dy] = headingVec(entity.heading);
+  const ncx = entity.cx+dx, ncy = entity.cy+dy;
+  if(inBounds(ncx,ncy) && isRoad(ncx,ncy)){
+    entity.cx = ncx; entity.cy = ncy; syncEntityTarget(entity); return 1;
+  }
+  if(inTurnZone(entity.cx, entity.cy, entity.heading)){
+    const dir = Math.random()<0.5 ? 'left' : 'right';
+    const t = tryTurn(entity.cx, entity.cy, entity.heading, dir)
+           || tryTurn(entity.cx, entity.cy, entity.heading, dir==='left'?'right':'left');
+    if(t){ entity.cx=t.cx; entity.cy=t.cy; entity.heading=t.heading; syncEntityTarget(entity); return 2; }
+  }
+  return 0;
+}
+
+function enterPursuit(now){
+  police.state = 'PURSUIT';
+  police.pursuitHoldStartTime = now; // start the cop's own accel-to-top-speed curve
+}
+function enterSearch(){
+  police.state = 'SEARCH';
+  police.searchCellsRemaining = SEARCH_TRAVEL_CELLS;
+  police.pursuitHoldStartTime = null; // no longer accelerating in PURSUIT
+}
+function enterReturn(){
+  police.state = 'RETURN';
+  police.pursuitHoldStartTime = null;
+}
+function enterPatrolAtSpawn(){
+  police.state = 'PATROL';
+  police.cx = POLICE_SPAWN.cx; police.cy = POLICE_SPAWN.cy; police.heading = POLICE_SPAWN.heading;
+  police.prevCx = police.cx; police.prevCy = police.cy; // avoid a false swept-collision "jump" from the pre-respawn position
+  police.collisionArmed = true;
+  police.targetCornerIndex = 0;
+  police.pursuitHoldStartTime = null;
+  syncEntityTarget(police);
+}
+
+// Bumps an entity backward (opposite its own current heading) a few grid
+// cells, for post-collision separation. "Backward relative to its own
+// heading" is always a safe direction to check for a valid road cell,
+// since that's the cell it just came from — and since a collision only
+// happens when the two cars were closing in on each other, retreating
+// each one along its own facing reliably pulls them apart rather than
+// pushing them further together, for head-on, rear-end, or T-bone hits alike.
+// Pushes an entity `cells` grid-steps in a given cardinal direction
+// (dx,dy each -1/0/1, only one nonzero), stopping early if it hits a
+// wall/edge rather than clipping through it.
+function pushInDirection(entity, dx, dy, cells){
+  for(let i=0;i<cells;i++){
+    const nx = entity.cx+dx, ny = entity.cy+dy;
+    if(inBounds(nx,ny) && isRoad(nx,ny)){ entity.cx = nx; entity.cy = ny; }
+    else break;
+  }
+  syncEntityTarget(entity);
+}
+
+// Separates two cars after a collision by pushing each one AWAY FROM THE
+// OTHER's position — not backward relative to its own heading. Using each
+// car's own heading would fail to actually separate them whenever both
+// happen to share the same heading (e.g. a rear-end hit while both are
+// driving the same direction): retreating "backward" relative to an
+// identical heading shifts both by the identical vector, leaving the
+// distance between them completely unchanged. Pushing away from the
+// other car's (pre-knockback) position guarantees the distance between
+// them increases regardless of either car's heading. Generic over any
+// two entities so it works for the player against either cop unit.
+function applyCollisionKnockback(entityA, entityB, cells){
+  const aAt = {cx:entityA.cx, cy:entityA.cy};
+  const bAt = {cx:entityB.cx, cy:entityB.cy};
+  let aDir, bDir;
+  if(aAt.cx===bAt.cx && aAt.cy===bAt.cy){
+    // Exact same-cell overlap: there's no positional vector to derive an
+    // "away" direction from. Falling back to each car's own heading here
+    // has the same flaw as above — if they happen to share a heading,
+    // both would retreat the identical way and stay overlapped. Instead,
+    // use a fixed, deterministic split (A west, B east) which is
+    // guaranteed to send them opposite ways regardless of heading; if
+    // that axis happens to be blocked for either of them, fall back to
+    // a north/south split instead.
+    const aWestOk = inBounds(aAt.cx-1,aAt.cy) && isRoad(aAt.cx-1,aAt.cy);
+    const bEastOk = inBounds(bAt.cx+1,bAt.cy) && isRoad(bAt.cx+1,bAt.cy);
+    if(aWestOk && bEastOk){ aDir=[-1,0]; bDir=[1,0]; }
+    else { aDir=[0,-1]; bDir=[0,1]; }
+  } else {
+    function awayDir(fromCx,fromCy, otherCx,otherCy){
+      const dcx = fromCx-otherCx, dcy = fromCy-otherCy;
+      return Math.abs(dcx) >= Math.abs(dcy) ? [dcx>0?1:-1, 0] : [0, dcy>0?1:-1];
+    }
+    aDir = awayDir(aAt.cx,aAt.cy, bAt.cx,bAt.cy);
+    bDir = awayDir(bAt.cx,bAt.cy, aAt.cx,aAt.cy);
+  }
+  pushInDirection(entityA, aDir[0], aDir[1], cells);
+  pushInDirection(entityB, bDir[0], bDir[1], cells);
+}
+
+function despawnPolice(now){
+  police.despawned = true;
+  policeDespawnAt = now;
+  document.getElementById('wantedBorder').classList.remove('show');
+}
+function respawnPolice(){
+  police.despawned = false;
+  police.health = MAX_HEALTH;
+  enterPatrolAtSpawn();
+}
+
+// Spawns the backup cop 3 blocks behind the player, already in PURSUIT.
+// "Behind" = opposite the player's current heading, along the SAME lane
+// the player is already on — since that whole lane strip is continuous
+// road regardless of how far along it you go (only the cross-axis
+// coordinate matters for road validity), this is always a valid road
+// position without needing any building-avoidance logic; it's only
+// clamped to the map's own edges, which are themselves road cells.
+// At most one backup unit is ever active — if one's already out, this
+// is a no-op (ramming a cop again doesn't stack up endless reinforcements).
+function spawnBackupCop(now){
+  if(police2.active) return;
+  const [dx,dy] = headingVec(car.heading);
+  const behindCells = 3 * BLOCK_CELLS; // "3 blocks behind"
+  let bx = Math.max(0, Math.min(GRID-1, car.cx - dx*behindCells));
+  let by = Math.max(0, Math.min(GRID-1, car.cy - dy*behindCells));
+  police2.cx = bx; police2.cy = by;
+  police2.prevCx = bx; police2.prevCy = by; // avoid a false swept-collision "jump" from (0,0), its inactive default position
+  police2.heading = car.heading; // already oriented toward the player
+  police2.state = 'PURSUIT';
+  police2.health = MAX_HEALTH;
+  police2.active = true;
+  police2.pursuitHoldStartTime = now;
+  police2.lastCollisionAt = -Infinity;
+  police2.collisionArmed = true;
+  police2.nextStepTime = now + POLICE_BASE_INTERVAL;
+  // hard-snap the visual position too, not just the grid position/target —
+  // otherwise, since it was sitting at the default (0,0) while inactive,
+  // it would visibly glide in all the way from the map's top-left corner
+  // over the first several frames instead of just appearing where it spawns
+  police2.vx = police2.targetVx = (bx+0.5)*CELL_PX;
+  police2.vy = police2.targetVy = (by+0.5)*CELL_PX;
+  police2.vAngle = police2.targetAngle = headingAngle(police2.heading);
+  syncEntityTarget(police2);
+}
+
+// Who's "at fault" in a collision is approximated by cop state: if it's
+// actively PURSUIT-ing, it's the one closing in and ramming the player;
+// any other time, the player is the one who drove into it. That vehicle
+// takes the heavy hit, the other takes minor damage — matching the two
+// named scenarios. Generic over either cop unit so both the primary
+// patrol car and the backup unit share identical damage/knockback rules;
+// only what happens when each one's health hits 0 differs (see below).
+function handleCollision(copUnit, now){
+  copUnit.lastCollisionAt = now;
+  const copIsRammer = copUnit.state==='PURSUIT';
+  if(copIsRammer){
+    car.health = Math.max(0, car.health - RAM_DAMAGE_TO_VICTIM);
+    copUnit.health = Math.max(0, copUnit.health - RAM_DAMAGE_TO_RAMMER);
+  } else {
+    copUnit.health = Math.max(0, copUnit.health - RAM_DAMAGE_TO_VICTIM);
+    car.health = Math.max(0, car.health - RAM_DAMAGE_TO_RAMMER);
+    // the player was the one who initiated this hit — call in backup
+    spawnBackupCop(now);
+  }
+  applyCollisionKnockback(car, copUnit, COLLISION_KNOCKBACK_CELLS);
+  if(car.health<=0){ triggerBusted(now); return; }
+  if(copUnit.health<=0){
+    if(copUnit===police2) police2.active = false; // backup unit just vanishes, no respawn timer
+    else despawnPolice(now); // primary cop does its usual 5s respawn-to-patrol
+  }
+}
+
+function triggerBusted(now){
+  gameState = 'BUSTED';
+  bustedAt = now;
+  document.getElementById('bustedOverlay').classList.add('show');
+  document.getElementById('wantedBorder').classList.remove('show');
+  for(const a in holds) holds[a].held = false; // release any held input (also stops the J-turn charge-up, since it's gated on holds.S.held)
+  car.forwardHoldStartTime = null; // reset the acceleration curve
+  car.reverseHoldStartTime = null;
+  car.momentumDir = null; car.momentumStepsLeft = 0; // no coasting into a busted freeze
+  car.fishtail = null;
+  car.nitroActivatedAt = null; // stop any active boost immediately (charges/cooldown reset fully on the full world reset)
+  if(typeof swipeReset==='function') swipeReset(); // release any active swipe-steer if mid-drag
+  if(typeof pedalAccelPointerId!=='undefined'){
+    pedalAccelPointerId = null; pedalAccelFraction = 0;
+    if(typeof pedalAccelLocked!=='undefined') pedalAccelLocked = false;
+    if(typeof accelPedalEl!=='undefined'){ accelPedalEl.classList.remove('pressed','locked'); accelPedalFillEl.style.height='0%'; }
+  }
+  if(typeof pedalBrakePressed!=='undefined') pedalBrakePressed = false;
+  if(typeof keyboardBrakeHeld!=='undefined') keyboardBrakeHeld = false;
+  if(typeof brakePedalEl!=='undefined') brakePedalEl.classList.remove('pressed');
+  // force fresh edge-detection on the gamepad so a direction held through
+  // the bust doesn't get stuck un-resumed after the world resets
+  if(typeof gpButtonPrev!=='undefined'){ gpButtonPrev = {}; }
+  if(typeof gpStickDir!=='undefined' && gpStickDir){ stopHold(gpStickDir); gpStickDir = null; }
+  currentGear = 0; throttleValue = 0; brakeValue = 0; gpThrottlePrevHeld = false;
+  gpGearRevGear = null; gpGearRevStartTime = null; gpGearFullSince = null;
+  brakeStoppedSince = null; brakeAutoReversing = false;
+  if(typeof keyboardThrottleLevel!=='undefined') keyboardThrottleLevel = 0;
+}
+
+function resetWorld(){
+  resetCar();
+  car.health = MAX_HEALTH;
+  police.despawned = false;
+  police.health = MAX_HEALTH;
+  enterPatrolAtSpawn();
+  police2.active = false; // any backup unit disappears on a world reset too
+  gameState = 'RUNNING';
+  document.getElementById('bustedOverlay').classList.remove('show');
+}
+
+function updatePolice(now){
+  if(gameState==='BUSTED'){
+    const remaining = Math.max(0, BUSTED_COOLDOWN_MS - (now-bustedAt));
+    document.getElementById('bustedSub').textContent = 'Resetting in ' + Math.ceil(remaining/1000) + '...';
+    if(remaining<=0) resetWorld();
+    return;
+  }
+
+  updateBackupCop(now); // independent of the primary cop's own state below
+
+  if(police.despawned){
+    // no collision checks, no AI state machine — the car simply isn't
+    // in play until the respawn cooldown elapses
+    if(now - policeDespawnAt >= POLICE_RESPAWN_COOLDOWN_MS) respawnPolice();
+    return;
+  }
+
+  // Checked both BEFORE the state machine runs below (catching contact
+  // caused by the player's own movement earlier this same tick, in
+  // updateHolds/updateMomentum) AND again AFTER it (catching contact
+  // caused by the police's OWN movement this tick) — see the call after
+  // runPoliceStateMachine() further down. Without that second check, a
+  // police-initiated overlap wouldn't get caught/knocked-apart until the
+  // NEXT animation frame, meaning one frame would render the two cars
+  // sitting exactly on top of each other. Checking again immediately
+  // after this tick's police movement closes that gap so an overlapping
+  // frame is never actually drawn.
+  if(checkCollision(police, now)) return;
+
+  if(now < policeNextStepTime) return;
+  const speedMult = copSpeedMultiplier(police, now);
+  policeNextStepTime = now + POLICE_BASE_INTERVAL/speedMult;
+
+  document.getElementById('wantedBorder').classList.toggle('show', police.state==='PURSUIT');
+
+  runPoliceStateMachine(now);
+  checkCollision(police, now); // catch any overlap the state machine's own movement just caused, same frame
+}
+
+// Distance from point (px,py) to the line SEGMENT (ax,ay)-(bx,by), not
+// just to its endpoints. Used to catch high-speed "tunneling": when
+// either car jumps multiple cells in a single frame (most notably from
+// the turn mechanic's deliberate 2-extra-cell landing push, which
+// combined with the "can turn 1 cell early" rule can move a car 3+
+// cells in one atomic update), a plain point-to-point distance check
+// before and after the jump can individually read as "far apart" even
+// though the straight-line path drove directly through the other car.
+function segmentPointMinDistance(ax,ay,bx,by, px,py){
+  const dx = bx-ax, dy = by-ay;
+  const lenSq = dx*dx + dy*dy;
+  if(lenSq===0) return Math.hypot(px-ax, py-ay); // no movement this frame — degenerates to a point check
+  let t = ((px-ax)*dx + (py-ay)*dy) / lenSq;
+  t = Math.max(0, Math.min(1, t)); // clamp to the segment, not the infinite line
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+}
+
+// Returns true (and applies damage+knockback) if the given cop unit is
+// currently within COLLISION_CELLS of the player, and it's "armed" (see
+// below). Factored out so it can be checked both before and after a
+// cop's own movement within a single update, and reused by both cop
+// units. Checks three things, any one of which counts as a hit: the
+// current point-to-point distance (the normal case), whether the cop's
+// path THIS FRAME (prev position -> current position) swept past the
+// car's current position, and whether the car's path this frame swept
+// past the cop's current position — covering a jump by either vehicle.
+//
+// Re-arming is DISTANCE-based, not a fixed timer: after a hit, copUnit
+// stays disarmed until the cars have actually separated past
+// COLLISION_REARM_DISTANCE, however long that takes. A flat time-based
+// cooldown (the old approach) disables detection completely for its
+// whole duration regardless of what's actually happening — at high
+// speed the player can close the knockback gap and drive straight
+// through the cop car well within a few hundred ms, passing through
+// with detection switched off the entire time. Re-arming only once
+// they've actually separated closes that gap while still preventing
+// the original problem (re-triggering every single frame the two
+// cars are still overlapping right after a hit).
+const COLLISION_REARM_DISTANCE = 2;
+function checkCollision(copUnit, now){
+  const pointDist = cellDistance(copUnit.cx,copUnit.cy, car.cx,car.cy);
+  const copSweepDist = segmentPointMinDistance(copUnit.prevCx,copUnit.prevCy, copUnit.cx,copUnit.cy, car.cx,car.cy);
+  const carSweepDist = segmentPointMinDistance(car.prevCx,car.prevCy, car.cx,car.cy, copUnit.cx,copUnit.cy);
+  const minDist = Math.min(pointDist, copSweepDist, carSweepDist);
+
+  if(!copUnit.collisionArmed){
+    if(minDist > COLLISION_REARM_DISTANCE) copUnit.collisionArmed = true;
+    return false;
+  }
+  if(minDist <= COLLISION_CELLS){
+    handleCollision(copUnit, now);
+    copUnit.collisionArmed = false; // disarmed until they actually separate again
+    return true;
+  }
+  return false;
+}
+
+// The backup cop has no patrol loop and no despawn/respawn cooldown of
+// its own — it only ever drives PURSUIT, and simply deactivates for good
+// (until the next spawnBackupCop() call) if it loses the chase or its
+// health hits 0. Same before/after collision-check pattern as the
+// primary cop, for the same reason (no overlapping frame ever rendered).
+function updateBackupCop(now){
+  if(!police2.active) return;
+  if(checkCollision(police2, now)){ return; } // may have deactivated itself just now
+  if(now < police2.nextStepTime) return;
+  const speedMult = copSpeedMultiplier(police2, now);
+  police2.nextStepTime = now + POLICE_BASE_INTERVAL/speedMult;
+
+  if(cellDistance(police2.cx,police2.cy,car.cx,car.cy) > CHASE_LOSE_CELLS){
+    police2.active = false; // lost the chase — backup unit just leaves
+    return;
+  }
+  stepToward(police2, car.cx, car.cy);
+  checkCollision(police2, now); // catch any overlap its own movement just caused, same frame
+}
+
+function runPoliceStateMachine(now){
+  if(police.state==='PATROL'){
+    if(canSeePlayer(police)){ enterPursuit(now); return; }
+    // scripted loop: take the turn only when it's for the corner we're aiming at
+    if(inTurnZone(police.cx, police.cy, police.heading)){
+      const origin = getTurnBoxOrigin(police.cx, police.cy, police.heading);
+      const target = PATROL_CORNERS[police.targetCornerIndex];
+      if(origin.boxCx===target.boxCx && origin.boxCy===target.boxCy){
+        const t = tryTurn(police.cx, police.cy, police.heading, 'right');
+        if(t){
+          police.cx=t.cx; police.cy=t.cy; police.heading=t.heading;
+          police.targetCornerIndex = (police.targetCornerIndex+1) % PATROL_CORNERS.length;
+          syncEntityTarget(police);
+          return;
+        }
+      }
+    }
+    const [dx,dy] = headingVec(police.heading);
+    const ncx = police.cx+dx, ncy = police.cy+dy;
+    if(inBounds(ncx,ncy) && isRoad(ncx,ncy)){ police.cx=ncx; police.cy=ncy; syncEntityTarget(police); }
+
+  } else if(police.state==='PURSUIT'){
+    if(cellDistance(police.cx,police.cy,car.cx,car.cy) > CHASE_LOSE_CELLS){ enterSearch(); return; }
+    stepToward(police, car.cx, car.cy);
+
+  } else if(police.state==='SEARCH'){
+    const moved = stepStraightOrRandomTurn(police);
+    police.searchCellsRemaining -= moved;
+    if(police.searchCellsRemaining <= 0){ enterReturn(); }
+
+  } else if(police.state==='RETURN'){
+    if(canSeePlayer(police)){ enterPursuit(now); return; }
+    const dist = cellDistance(police.cx,police.cy,POLICE_SPAWN.cx,POLICE_SPAWN.cy);
+    if(dist <= 2){ enterPatrolAtSpawn(); return; }
+    stepToward(police, POLICE_SPAWN.cx, POLICE_SPAWN.cy);
+  }
+}
+
+/* ============================================================
+   INPUT — keyboard + on-screen pad, hold-to-repeat.
+   A press fires immediately, then (after an initial delay) keeps
+   firing at a steady repeat rate for as long as it's held.
+   ============================================================ */
+const REPEAT_INITIAL_DELAY = 260; // ms before repeating starts
+const REPEAT_RATE = 130;          // ms between repeated steps once held at the current (non-accelerated) baseline speed
+
+// Player top speed / acceleration curve: holding forward doesn't just
+// repeat at a constant rate — the car accelerates the longer it's held,
+// up to a cap of MAX_SPEED_MULTIPLIER times the baseline REPEAT_RATE
+// speed. The curve is an exponential approach to that cap (quick
+// off-the-line acceleration that tapers off as it nears top speed),
+// which is the classic shape of a muscle car's acceleration curve —
+// big low-end pull, diminishing gains as it approaches redline/top speed —
+// as opposed to a straight line (constant acceleration) or an S-curve
+// (which would have a slow initial ramp-up, wrong for a muscle car).
+const MAX_SPEED_MULTIPLIER = 1.5; // top speed is 1.5x the baseline held-repeat speed
+const ACCEL_TAU_MS = 650;         // time-constant of the exponential approach to top speed
+
+// Cop top speed & acceleration: the primary patrol car's max PURSUIT speed
+// is double the player's own max speed multiplier above — but it takes
+// 1.5x as long (in real time) to actually spool up to that top speed,
+// using the same exponential approach-curve shape. See copSpeedMultiplier()
+// earlier (in the POLICE section) for where this is actually applied.
+const COP_MAX_SPEED_MULTIPLIER = MAX_SPEED_MULTIPLIER * 2; // = 3.0
+const COP_ACCEL_TAU_MS = ACCEL_TAU_MS * 1.5; // slower to reach top speed than the player
+
+// Returns the step interval (ms) for the current moment of an ongoing
+// forward hold: REPEAT_RATE at the instant of press, shrinking toward
+// REPEAT_RATE/MAX_SPEED_MULTIPLIER as the hold continues. Multiplied by
+// nitroBoostFactor() below, so nitro compounds with whatever speed the
+// player has already built up rather than overriding it.
+function forwardStepInterval(now){
+  if(car.forwardHoldStartTime==null) return REPEAT_RATE;
+  const heldFor = now - car.forwardHoldStartTime;
+  const speedMult = 1 + (MAX_SPEED_MULTIPLIER-1)*(1 - Math.exp(-heldFor/ACCEL_TAU_MS));
+  return REPEAT_RATE / (speedMult * nitroBoostFactor(now));
+}
+
+/* ------------------------------------------------------------
+   NITRO
+   A bank of limited-use speed boosts. Unlike the gradual muscle-car
+   acceleration curve above, nitro's own attack is deliberately "sudden" —
+   a very fast exponential ramp (tiny time-constant) to double speed,
+   essentially instant to the player — held flat for a fixed 3-second
+   window, then cut off abruptly rather than fading out. A 1-second
+   cooldown starts only once the boost actually ends (not from when it
+   was activated), before another charge can be spent.
+   ------------------------------------------------------------ */
+const NITRO_MAX_CHARGES = 3;
+const NITRO_MULTIPLIER = 2;        // doubles whatever speed the player currently has
+const NITRO_DURATION_MS = 3000;
+const NITRO_ATTACK_TAU_MS = 70;    // very fast ramp — reads as "sudden," not gradual
+const NITRO_COOLDOWN_MS = 1000;    // starts when the boost ENDS, not when it starts
+
+function activateNitro(now){
+  if(gameState==='BUSTED') return;
+  if(car.nitroCharges<=0) return;          // bank is empty
+  if(car.nitroActivatedAt!=null) return;   // already boosting
+  if(now < car.nitroCooldownUntil) return; // still on cooldown from the last boost
+  car.nitroCharges--;
+  car.nitroActivatedAt = now;
+  car.nitroActiveUntil = now + NITRO_DURATION_MS;
+}
+// Call once per frame: ends the boost exactly at its duration and starts
+// the post-boost cooldown timer from that moment.
+function updateNitro(now){
+  if(car.nitroActivatedAt!=null && now >= car.nitroActiveUntil){
+    car.nitroActivatedAt = null;
+    car.nitroCooldownUntil = now + NITRO_COOLDOWN_MS;
+  }
+}
+// The actual speed multiplier nitro currently contributes: 1.0 when not
+// boosting, otherwise a fast ramp up to NITRO_MULTIPLIER that holds flat
+// until the boost's hard cutoff (handled by updateNitro, not by decaying
+// this curve itself — the curve only ever ramps up, never down).
+function nitroBoostFactor(now){
+  if(car.nitroActivatedAt==null) return 1;
+  const t = now - car.nitroActivatedAt;
+  return 1 + (NITRO_MULTIPLIER-1)*(1 - Math.exp(-t/NITRO_ATTACK_TAU_MS));
+}
+
+// When the camera rotates with the player (ROTATE_CAMERA_WITH_PLAYER),
+// screen-up is always wherever the car is currently facing — so N/S/E/W
+// presses need to map directly to forward/backward/turn-right/turn-left
+// rather than to fixed compass headings. When the camera is north-up
+// instead, fall back to the old world-relative resolver.
+function screenDirAction(dir){
+  if(ROTATE_CAMERA_WITH_PLAYER){
+    if(dir==='N'){ if(!moveForward()) stallForwardDrive(performance.now()); }
+    else if(dir==='S') moveBackward();
+    else if(dir==='E') pressLeftRight('right');
+    else if(dir==='W') pressLeftRight('left');
+  } else {
+    absoluteAction(dir);
+  }
+}
+
+function runAction(dir){
+  if(gameState==='BUSTED') return; // input frozen during the busted cooldown
+  screenDirAction(dir);
+}
+
+// one independent hold-tracker per compass direction so holding two
+// buttons at once (e.g. north + west) doesn't interfere with each other's timing
+const holds = {
+  N: {held:false, next:0},
+  S: {held:false, next:0},
+  E: {held:false, next:0},
+  W: {held:false, next:0}
+};
+
+function startHold(dir){
+  if(gameState==='BUSTED') return; // input frozen during the busted cooldown
+  const h = holds[dir];
+  if(h.held) return; // already holding, ignore duplicate press events
+  h.held = true;
+  const now = performance.now();
+  if(dir==='N') car.forwardHoldStartTime = now; // begin the acceleration curve for this hold
+  if(dir==='S') car.reverseHoldStartTime = now; // start tracking reverse "speed", for J-turn momentum (see spinCar180/reverseSpeedFraction) and the speed-bar reverse-zone display
+  runAction(dir); // fire immediately on press (normal reverse for S, same as any other direction)
+  h.next = now + REPEAT_INITIAL_DELAY; // then wait before repeating
+}
+function stopHold(dir){
+  holds[dir].held = false;
+  if(dir==='N') car.forwardHoldStartTime = null; // releasing resets the acceleration curve
+  if(dir==='S') car.reverseHoldStartTime = null;
+}
+function updateHolds(now){
+  for(const dir in holds){
+    const h = holds[dir];
+    if(h.held && now >= h.next){
+      runAction(dir);
+      h.next = now + (dir==='N' ? forwardStepInterval(now) : REPEAT_RATE);
+    }
+  }
+}
+
+// Arrow keys (and WASD) map to fixed world/screen directions, not to the
+// car's current heading — Up always means north-on-screen, Left always
+// means west-on-screen, etc.
+const KEY_ACTIONS = {
+  ArrowLeft:'W', a:'W', A:'W',
+  ArrowRight:'E', d:'E', D:'E'
+};
+
+// Arrow Up/Down: step a signed "lever" level (-1 full reverse .. 0 neutral
+// .. +1 full forward) up or down by one increment per press (not a
+// hold/repeat — same one-shot-per-tap pattern as W/S and nitro below).
+// The sign of the level always matches currentGear's direction; only the
+// two edges are special-cased, exactly as specced:
+//   - going positive from <=0 -> ensure at least 1st gear (never forces
+//     an already-higher forward gear back down to 1st, it just won't go
+//     below it)
+//   - going negative from >=0 -> shift into Reverse
+// Everything else (further presses while already forward or already
+// reverse) just changes magnitude in that same direction — pressing Up
+// again while already in Reverse backs the level toward 0, which lands
+// in Neutral, and a subsequent Up from there goes on to 1st gear at one
+// increment, exactly matching "goes to neutral and then 1st with one
+// increment" — the natural symmetric counterpart of Down entering
+// reverse from 0. (Note: taking that description literally as written —
+// "presses down while in reverse" — wouldn't produce that sequence at
+// all; pressing Down while already reversing would only deepen reverse
+// further. Implemented here as the Up case instead, since that's the
+// only reading that's internally consistent with the rest of the spec —
+// worth confirming this is what was meant.)
+const ARROW_ACCEL_INCREMENT = 0.2;
+let keyboardThrottleLevel = 0; // signed: <0 reverse magnitude, >0 forward magnitude, 0 = neutral/no arrow-throttle
+function arrowAccelStep(delta){
+  keyboardThrottleLevel = Math.max(-1, Math.min(1, keyboardThrottleLevel + delta));
+  if(keyboardThrottleLevel > 0){
+    if(currentGear <= 0) currentGear = 1; // ensure at least 1st, never downshifts an already-higher gear
+  } else if(keyboardThrottleLevel < 0){
+    currentGear = -1; // Reverse
+  } else {
+    currentGear = 0; // landed exactly on neutral
+  }
+  // Pedal fill itself is now driven once per frame in tick() from the
+  // shared, eased throttleValue — see setAccelPedalFraction()'s comment
+  // for why (single source of truth across touch/keyboard/gamepad).
+}
+
+window.addEventListener('keydown', (e)=>{
+  const dir = KEY_ACTIONS[e.key];
+  if(dir){
+    e.preventDefault();
+    if(e.repeat) return; // ignore the browser's own OS-level key-repeat; we drive repeats ourselves
+    startHold(dir);
+    return;
+  }
+  if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(e.repeat) return;
+    if(e.shiftKey) shiftUp(); // Shift+Up = gear up, instead of incrementing the accelerator level
+    else arrowAccelStep(ARROW_ACCEL_INCREMENT); // one increment per press, not a hold/ramp
+    return;
+  }
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(e.repeat) return;
+    if(e.shiftKey) shiftDown(performance.now()); // Shift+Down = gear down, instead of decrementing the accelerator level
+    else arrowAccelStep(-ARROW_ACCEL_INCREMENT);
+    return;
+  }
+  if(e.key==='n' || e.key==='N' || e.key==='/'){
+    e.preventDefault();
+    if(e.repeat) return; // nitro is a one-shot trigger, not something that repeats while held
+    activateNitro(performance.now());
+    return;
+  }
+  if(e.key===' '){
+    e.preventDefault();
+    if(e.repeat) return;
+    keyboardBrakeHeld = true;
+    brakePedalEl.classList.add('pressed'); // same visual feedback the touch/mouse brake press already gives
+    return;
+  }
+  // W/S are dedicated gear-shift keys on desktop — one shift per press,
+  // not a hold/repeat action, same as tapping the right stick, swiping
+  // up/down, or Shift+Up/Down above.
+  if(e.key==='w' || e.key==='W'){
+    e.preventDefault();
+    if(e.repeat) return;
+    shiftUp();
+    return;
+  }
+  if(e.key==='s' || e.key==='S'){
+    e.preventDefault();
+    if(e.repeat) return;
+    shiftDown(performance.now());
+  }
+});
+window.addEventListener('keyup', (e)=>{
+  const dir = KEY_ACTIONS[e.key];
+  if(dir){ stopHold(dir); return; }
+  if(e.key===' '){
+    keyboardBrakeHeld = false;
+    brakePedalEl.classList.remove('pressed');
+  }
+});
+// if the window loses focus mid-hold (alt-tab, etc.), don't leave movement stuck on
+window.addEventListener('blur', ()=>{
+  for(const dir in holds) stopHold(dir);
+  keyboardBrakeHeld = false;
+  if(typeof brakePedalEl!=='undefined') brakePedalEl.classList.remove('pressed');
+  swipeReset();
+});
+
+/* ------------------------------------------------------------
+   Mobile controls: accelerator/brake pedals + swipe gestures.
+   Pedals mirror the gamepad triggers exactly — they just feed binary
+   0/1 "raw" values into the same updateDrivetrain() the gamepad's
+   analog triggers use (combined in tick()), so every gear/rev-bar/
+   auto-shift/J-turn rule behaves identically regardless of input device.
+   Swipes mirror the gamepad's two sticks: a horizontal drag steers
+   (left/right turn or lane-change, via the same startHold/stopHold
+   pipeline as keyboard — "respecting current lane change and turn
+   behaviour" automatically, since it's the literal same code path), and
+   a vertical drag shifts gear (up = upshift, down = downshift, with the
+   same double-tap-down/from-Neutral-or-Reverse J-turn rule).
+   ------------------------------------------------------------ */
+let pedalBrakePressed = false;
+let keyboardBrakeHeld = false; // space bar
+function bindPedal(el, setPressed){
+  const press = (e)=>{ e.preventDefault(); setPressed(true); el.classList.add('pressed'); };
+  const release = (e)=>{ if(e) e.preventDefault(); setPressed(false); el.classList.remove('pressed'); };
+  el.addEventListener('pointerdown', press);
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointerleave', release);
+  el.addEventListener('pointercancel', release);
+}
+const brakePedalEl = document.getElementById('brakePedal');
+bindPedal(brakePedalEl, (v)=>{ pedalBrakePressed = v; });
+
+// Accelerator pedal: proportional, not a simple on/off press — top speed
+// in the current gear is mapped to how high up the pedal the touch point
+// currently is (mirrors the gamepad's analog trigger, which already
+// scales speed by effectiveThrottle — see updateDrivetrain). Bottom of
+// the pedal = no throttle, top = full throttle.
+const accelPedalEl = document.getElementById('accelPedal');
+const accelPedalFillEl = document.getElementById('accelPedalFill');
+let pedalAccelFraction = 0; // 0..1, fed into updateDrivetrain as this frame's raw throttle
+let pedalAccelPointerId = null;
+let accelPedalRect = null; // cached once per press — see note below
+
+// clientY-to-fraction only, using an already-cached rect — NOT calling
+// getBoundingClientRect() itself. That call forces the browser to run a
+// synchronous layout pass, and pointermove can fire dozens of times per
+// second during a drag — recomputing it on every single move event (as
+// an earlier version of this did) was a real, measurable source of input
+// lag/jank, not just "the implementation being complex." Caching the
+// rect once at pointerdown (the pedal's on-screen position doesn't
+// change mid-drag) and reusing it for the whole gesture avoids that
+// entirely, the same pattern the old thumbstick used for the same reason.
+function fractionForY(clientY){
+  const frac = (accelPedalRect.bottom - clientY) / accelPedalRect.height; // bottom edge = 0, top edge = 1
+  return Math.max(0, Math.min(1, frac));
+}
+function setAccelPedalFraction(clientY){
+  pedalAccelFraction = fractionForY(clientY);
+  // fill height itself is now driven once per frame in tick() from the
+  // shared, eased throttleValue (see below) — that's the single source
+  // of truth combining touch/mouse, keyboard, AND gamepad trigger input,
+  // so the pedal visually reflects whichever is actually driving the car
+  // instead of each input method fighting over the DOM directly.
+}
+// Cruise-control lock: releasing contact with the pedal — mouse click OR
+// touch — locks the throttle at whatever level it was last at, instead
+// of dropping to 0 like a momentary press/release would. Pressing the
+// pedal again (mouse or touch) clears that lock and starts fresh from
+// wherever the new press sets it.
+let pedalAccelLocked = false;
+
+accelPedalEl.addEventListener('pointerdown', (e)=>{
+  e.preventDefault();
+  if(pedalAccelPointerId!==null) return; // one touch at a time
+  if(pedalAccelLocked){
+    // pressing again while locked resets the lock and the level, then
+    // this same press immediately starts a fresh one as usual below
+    pedalAccelLocked = false;
+    pedalAccelFraction = 0;
+    accelPedalFillEl.style.height = '0%';
+    accelPedalEl.classList.remove('locked');
+  }
+  pedalAccelPointerId = e.pointerId;
+  accelPedalEl.setPointerCapture(e.pointerId);
+  accelPedalEl.classList.add('pressed');
+  accelPedalRect = accelPedalEl.getBoundingClientRect(); // measured once per press, not per move
+  setAccelPedalFraction(e.clientY);
+});
+accelPedalEl.addEventListener('pointermove', (e)=>{
+  if(e.pointerId!==pedalAccelPointerId) return;
+  e.preventDefault();
+  // pointer capture keeps move/up events targeting this element even if
+  // the finger drags outside its visual bounds — intentionally NOT
+  // released on pointerleave, so sliding slightly off the edge while
+  // still pressing down just clamps the fraction rather than cutting the
+  // throttle immediately, like a real pedal/slider would behave.
+  setAccelPedalFraction(e.clientY);
+});
+function accelPedalEnd(e){
+  if(e.pointerId!==pedalAccelPointerId) return;
+  pedalAccelPointerId = null;
+  accelPedalEl.classList.remove('pressed');
+  // lock at the current level instead of releasing to 0
+  pedalAccelLocked = true;
+  accelPedalEl.classList.add('locked');
+}
+accelPedalEl.addEventListener('pointerup', accelPedalEnd);
+accelPedalEl.addEventListener('pointercancel', accelPedalEnd);
+
+// Swipe surface: the canvas itself, since it fills the whole background
+// and sits behind every fixed-position UI control (pedals, nitro, reset,
+// HUD) — a touch on any of those hits that element first, never the
+// canvas underneath, so there's no gesture conflict with the buttons.
+const swipeSurface = document.getElementById('c');
+let swipePointerId = null;
+let swipeStartX = 0, swipeStartY = 0;
+let swipeMode = null;     // null (undetermined) | 'horizontal' | 'vertical'
+let swipeSteerDir = null; // currently-held E/W direction while in horizontal mode
+const SWIPE_MODE_LOCK_PX = 12;   // movement needed before committing to horizontal vs vertical
+const SWIPE_STEER_DEADZONE_PX = 18; // horizontal drag needed before a steer direction is "held"
+const SWIPE_GEAR_THRESHOLD_PX = 40; // vertical drag needed to count as a gear-shift swipe
+
+function swipeReset(){
+  if(swipeSteerDir){ stopHold(swipeSteerDir); swipeSteerDir = null; }
+  swipePointerId = null;
+  swipeMode = null;
+}
+swipeSurface.addEventListener('pointerdown', (e)=>{
+  if(swipePointerId!==null) return; // one gesture at a time
+  swipePointerId = e.pointerId;
+  swipeStartX = e.clientX; swipeStartY = e.clientY;
+  swipeMode = null; swipeSteerDir = null;
+  swipeSurface.setPointerCapture(e.pointerId);
+});
+swipeSurface.addEventListener('pointermove', (e)=>{
+  if(e.pointerId!==swipePointerId) return;
+  const dx = e.clientX-swipeStartX, dy = e.clientY-swipeStartY;
+  if(swipeMode==null){
+    if(Math.abs(dx)>SWIPE_MODE_LOCK_PX || Math.abs(dy)>SWIPE_MODE_LOCK_PX){
+      // commit to whichever axis has moved more, for the rest of this gesture
+      swipeMode = Math.abs(dx)>=Math.abs(dy) ? 'horizontal' : 'vertical';
+    }
+  }
+  if(swipeMode==='horizontal'){
+    const dir = dx>SWIPE_STEER_DEADZONE_PX ? 'E' : dx<-SWIPE_STEER_DEADZONE_PX ? 'W' : null;
+    if(dir !== swipeSteerDir){
+      if(swipeSteerDir) stopHold(swipeSteerDir);
+      swipeSteerDir = dir;
+      if(swipeSteerDir) startHold(swipeSteerDir);
+    }
+  }
+  // vertical mode: gear-shift swipes act on release, not during the drag —
+  // see swipeEnd() — since a shift is a discrete one-shot gesture, not
+  // something that should repeat continuously while dragging.
+});
+function swipeEnd(e){
+  if(e.pointerId!==swipePointerId) return;
+  if(swipeMode==='vertical'){
+    const dy = e.clientY-swipeStartY;
+    if(dy <= -SWIPE_GEAR_THRESHOLD_PX) shiftUp();
+    else if(dy >= SWIPE_GEAR_THRESHOLD_PX) shiftDown(performance.now());
+  }
+  swipeReset();
+}
+swipeSurface.addEventListener('pointerup', swipeEnd);
+swipeSurface.addEventListener('pointercancel', swipeEnd);
+
+/* ------------------------------------------------------------
+   Game controller (Gamepad API) — dedicated scheme
+   This does NOT reuse the D-pad/left-stick compass mapping. It's a
+   fully separate control model: analog trigger throttle/brake, a
+   discrete 4-speed-plus-reverse gearbox flicked on the right stick,
+   and the left stick still driving turns/lane-changes (reusing the
+   existing turn/lane logic exactly, just fed from stick tilt instead
+   of the D-pad).
+   ------------------------------------------------------------ */
+let gamepadConnected = false;
+let gamepadBlocked = false; // true if this browsing context's permissions policy disallows the API
+try{
+  window.addEventListener('gamepadconnected', ()=>{ gamepadConnected = true; });
+  window.addEventListener('gamepaddisconnected', ()=>{ gamepadConnected = false; });
+} catch(err){ gamepadBlocked = true; }
+
+const GP_RESET_BUTTON = 9;   // Start/Options — reset player position
+const GP_NITRO_BUTTON = 2;   // 'X' on Xbox / Square on PlayStation
+const GP_RIGHT_TRIGGER = 7;  // RT/R2 — accelerator
+const GP_LEFT_TRIGGER  = 6;  // LT/L2 — brake
+const GP_STICK_DEADZONE = 0.35;
+const GP_GEAR_FLICK_THRESHOLD = 0.6; // how far up/down the right stick must tilt to register as a gear tap
+const GP_GEAR_REARM_THRESHOLD = 0.3; // must return below this before another tap can register
+
+// Gears: 0=Neutral, 1..4 forward speeds, -1=Reverse. Each forward gear is
+// a step-interval floor — higher gears allow faster driving (a smaller
+// minimum interval, i.e. a higher effective top speed cap), same
+// mechanism as MAX_SPEED_MULTIPLIER but gear-gated instead of held-time-gated.
+const GEAR_SPEED_MULTIPLIER = {1:0.3, 2:0.9, 3:1.2, 4:MAX_SPEED_MULTIPLIER}; // 1st halved per request (was 0.6); 4th matches the existing top speed
+let currentGear = 0; // 0=N, 1-4=forward, -1=R
+let rightStickGearArmed = true; // must re-center before the next tap counts
+
+// Throttle/brake state, driven by analog trigger values each frame
+let throttleValue = 0; // 0..1, eased toward the trigger's raw value
+let brakeValue = 0;    // 0..1, eased toward the trigger's raw value
+const THROTTLE_RAMP_UP_EASE = 0.18;   // how fast throttle rises toward the trigger's held value
+const THROTTLE_RAMP_DOWN_EASE = 0.06; // how fast throttle decays toward 0 once released — slower, so it "ramps down"
+const BRAKE_EASE = 0.35; // brakes bite fast in both directions
+
+let gpThrottleNextStepTime = 0;
+let gpThrottlePrevHeld = false; // edge-detection for the Neutral auto-shift-to-1st (see below)
+let lastEffectiveThrottle = 0; // cached each frame by updateDrivetrain, read by the display functions below
+let gpRawThrottle = 0, gpRawBrake = 0; // this frame's raw gamepad trigger values, read in pollGamepad
+
+/* ------------------------------------------------------------
+   Per-gear "rev" progress — a tachometer-style curve, separate from the
+   throttle-proportional speed that actually drives the car (that stays
+   immediate/responsive to trigger pressure — see the movement interval
+   calc below). This curve exists purely for the speed-bar DISPLAY and
+   the auto-upshift rule: while continuously accelerating in a gear, it
+   ramps from empty to full over ~1-2 seconds; once it's been full for
+   more than a second, the car automatically shifts up (and the curve
+   restarts from empty for the new gear).
+   ------------------------------------------------------------ */
+const GEAR_REV_TAU_MS = 900;          // time-constant of the empty->full ramp
+const GEAR_FULL_THRESHOLD = 0.98;     // "full" — the curve is asymptotic and never hits exactly 1.0
+const GEAR_FULL_HOLD_TO_UPSHIFT_MS = 1000; // "when full for more than 1 second"
+let gpGearRevGear = null;             // which gear the current rev timer belongs to
+let gpGearRevStartTime = null;        // when continuous acceleration in that gear began
+let gpGearFullSince = null;           // when the rev curve first reached "full", or null
+
+function gearRevProgress(now){
+  if(gpGearRevStartTime==null) return 0;
+  const heldFor = now - gpGearRevStartTime;
+  return 1 - Math.exp(-heldFor/GEAR_REV_TAU_MS);
+}
+
+// Brake-hold auto-reverse: holding the brake decelerates the car as
+// normal; once it's actually stopped, continuing to hold for one more
+// second auto-shifts into Reverse and starts driving backward on its
+// own — see the "Brake-hold auto-reverse" block in updateDrivetrain().
+const BRAKE_AUTO_REVERSE_DELAY_MS = 1000;
+let brakeStoppedSince = null;
+let brakeAutoReversing = false; // latched true once reverse actually engages — see the brake-hold block below
+
+function shiftUp(){
+  if(currentGear < 4) currentGear++;
+}
+function shiftDown(now){
+  if(currentGear > -1) currentGear--; // walks 4->3->2->1->N->R, one tap at a time
+}
+
+function pollGamepad(now){
+  if(gamepadBlocked) return; // e.g. some embedded/in-app browsers disallow this via permissions policy
+  let pads;
+  try{
+    pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  } catch(err){
+    // some embedded browsers (in-app webviews, etc.) throw a SecurityError
+    // here rather than just returning an empty list — treat that as "no
+    // gamepad support in this context" and stop polling instead of letting
+    // it crash the render loop every frame
+    gamepadBlocked = true;
+    console.warn('Gamepad API unavailable in this browsing context:', err);
+    return;
+  }
+  const gp = pads && pads[0];
+  if(!gp){ return; }
+  gamepadConnected = true;
+  if(gameState==='BUSTED') return; // input frozen during the busted cooldown
+
+  // --- Left stick: turns/lane-changes, reusing the exact existing logic ---
+  // (same deadzone+quantize+hold pipeline as keyboard, just restricted to
+  // E/W here since accel/brake now own forward/back)
+  const lx = gp.axes[0]||0, ly = gp.axes[1]||0;
+  const turnDir = Math.abs(lx) > GP_STICK_DEADZONE ? (lx>0?'E':'W') : null;
+  if(turnDir !== gpStickDir){
+    if(gpStickDir) stopHold(gpStickDir);
+    gpStickDir = turnDir;
+    if(gpStickDir) startHold(gpStickDir);
+  }
+
+  // --- Triggers: read raw analog values only here. The actual throttle/
+  // brake easing and gear/movement application is shared with the touch
+  // pedals (see updateDrivetrain), combined once per frame in tick().
+  const rt = gp.buttons[GP_RIGHT_TRIGGER];
+  gpRawThrottle = rt ? (rt.value!=null ? rt.value : (rt.pressed?1:0)) : 0;
+  const lt = gp.buttons[GP_LEFT_TRIGGER];
+  gpRawBrake = lt ? (lt.value!=null ? lt.value : (lt.pressed?1:0)) : 0;
+
+  // --- Right stick: gear selector, tap-up/tap-down (not a continuous axis) ---
+  const ry = gp.axes[3]!=null ? gp.axes[3] : (gp.axes[1]||0); // standard mapping: axis 3 = right stick Y
+  if(rightStickGearArmed && ry <= -GP_GEAR_FLICK_THRESHOLD){
+    shiftUp();
+    rightStickGearArmed = false;
+  } else if(rightStickGearArmed && ry >= GP_GEAR_FLICK_THRESHOLD){
+    shiftDown(now);
+    rightStickGearArmed = false;
+  } else if(Math.abs(ry) < GP_GEAR_REARM_THRESHOLD){
+    rightStickGearArmed = true; // must return to center before another tap counts
+  }
+
+  // face button: handbrake 180 spin (manual, independent of the gear-based triggers above)
+  const spinBtn = gp.buttons[1];
+  const spinPressed = !!(spinBtn && spinBtn.pressed);
+  if(spinPressed && !gpButtonPrev[1]) spinCar180('right', reverseSpeedFraction(now));
+  gpButtonPrev[1] = spinPressed;
+
+  // nitro
+  const nitroBtn = gp.buttons[GP_NITRO_BUTTON];
+  const nitroPressed = !!(nitroBtn && nitroBtn.pressed);
+  if(nitroPressed && !gpButtonPrev[GP_NITRO_BUTTON]) activateNitro(now);
+  gpButtonPrev[GP_NITRO_BUTTON] = nitroPressed;
+
+  // start/options: reset player position
+  const resetBtn = gp.buttons[GP_RESET_BUTTON];
+  const resetPressed = !!(resetBtn && resetBtn.pressed);
+  if(resetPressed && !gpButtonPrev[GP_RESET_BUTTON]) resetCar();
+  gpButtonPrev[GP_RESET_BUTTON] = resetPressed;
+}
+
+// Shared by both the gamepad triggers and the touch accelerator/brake
+// pedals: given this frame's raw throttle/brake (each 0..1 — analog from
+// a real trigger, or just 0/1 from a digital pedal press either way),
+// eases them, applies the Neutral auto-shift, the reverse auto-J-turn
+// timer, actual forward/reverse movement, the per-gear rev-bar ramp and
+// its auto-upshift, and the brake-hold auto-downshift. One single place
+// for all of this means the two input methods can never drift out of
+// sync with each other, and either (or both, combined via Math.max — see
+// tick()) can drive the car identically.
+function updateDrivetrain(now, rawThrottle, rawBrake){
+  const throttleEase = rawThrottle > throttleValue ? THROTTLE_RAMP_UP_EASE : THROTTLE_RAMP_DOWN_EASE;
+  throttleValue += (rawThrottle - throttleValue) * throttleEase;
+  brakeValue += (rawBrake - brakeValue) * BRAKE_EASE;
+
+  if(currentGear===0 && throttleValue > 0.05 && !gpThrottlePrevHeld){
+    // Neutral: pressing the accelerator auto-shifts to 1st — but only on a
+    // FRESH press. Without the !gpThrottlePrevHeld check here, this would
+    // re-fire every single frame the pedal/trigger stays held, immediately
+    // re-engaging 1st gear the instant the player shifted down into
+    // Neutral while still holding the accelerator — making it impossible
+    // to actually coast in Neutral without first letting off.
+    currentGear = 1;
+  }
+  gpThrottlePrevHeld = throttleValue > 0.05;
+
+  const effectiveThrottle = Math.max(0, throttleValue - brakeValue*1.5); // braking cuts through throttle fast
+  lastEffectiveThrottle = effectiveThrottle; // cached for the display functions below (bar + text readout)
+  const activelyReversing = currentGear===-1 && effectiveThrottle > 0.05 && brakeValue < 0.5;
+
+  if(currentGear>0 && effectiveThrottle > 0.05 && brakeValue < 0.5){
+    // Actual movement stays immediately responsive to pedal/trigger
+    // pressure — this is deliberately NOT gated on the rev curve below,
+    // so the car doesn't sit motionless while the tachometer bar fills.
+    // gearMult*effectiveThrottle already IS the proportional top-speed
+    // cap: at half throttle, this can never exceed half the gear's max.
+    //
+    // At low gear + light throttle this raw formula can produce a VERY
+    // long interval (e.g. gear 1 at 10% throttle: ~4.3 SECONDS between
+    // grid-steps) — technically still moving, but perceptually
+    // indistinguishable from being stopped. MAX_ACCEL_STEP_INTERVAL_MS
+    // caps how long the car will ever wait between steps while the
+    // accelerator is engaged at all, guaranteeing a perceptible minimum
+    // crawl speed; anything above that floor (the normal case at
+    // moderate-to-full throttle) is untouched and stays exactly
+    // proportional to gear and throttle as before.
+    const gearMult = GEAR_SPEED_MULTIPLIER[currentGear];
+    const rawInterval = REPEAT_RATE / (gearMult * effectiveThrottle * nitroBoostFactor(now));
+    const interval = Math.min(MAX_ACCEL_STEP_INTERVAL_MS, rawInterval);
+    if(now >= gpThrottleNextStepTime){
+      if(!moveForward()) stallForwardDrive(now);
+      gpThrottleNextStepTime = now + Math.max(MOMENTUM_MIN_INTERVAL, interval);
+    }
+    // Rev curve: (re)start it if this is a fresh press or the gear just
+    // changed, otherwise let it keep ramping toward full.
+    if(gpGearRevGear !== currentGear || gpGearRevStartTime==null){
+      gpGearRevGear = currentGear;
+      gpGearRevStartTime = now;
+      gpGearFullSince = null;
+    }
+    // The rev curve alone only tracks how long you've been on the gas —
+    // it would happily ramp to "full" over time even at half throttle.
+    // Capping it by effectiveThrottle here means the bar (and the
+    // auto-upshift threshold below) can never exceed your current pedal/
+    // trigger depth: at 50% throttle, the bar tops out at 50%, and since
+    // GEAR_FULL_THRESHOLD is 0.98, an upshift can only ever fire at
+    // (near) full throttle — partial throttle just cruises capped,
+    // it never revs out.
+    const cappedRevProgress = Math.min(gearRevProgress(now), effectiveThrottle);
+    if(cappedRevProgress >= GEAR_FULL_THRESHOLD){
+      if(gpGearFullSince==null) gpGearFullSince = now;
+      else if(now - gpGearFullSince >= GEAR_FULL_HOLD_TO_UPSHIFT_MS && currentGear < 4){
+        currentGear++;
+        gpGearRevGear = currentGear;
+        gpGearRevStartTime = now; // fresh ramp-up in the new gear
+        gpGearFullSince = null;
+      }
+    } else {
+      gpGearFullSince = null;
+    }
+  } else if(activelyReversing){
+    if(now >= gpThrottleNextStepTime){
+      moveBackward();
+      gpThrottleNextStepTime = now + REPEAT_RATE;
+    }
+  } else if(brakeValue > 0.5 && car.momentumDir){
+    // hard braking kills momentum quickly instead of letting it coast out
+    car.momentumStepsLeft = Math.min(car.momentumStepsLeft, 1);
+  }
+  if(!(currentGear>0 && effectiveThrottle > 0.05 && brakeValue < 0.5)){
+    // not actively accelerating in a forward gear right now (reversing,
+    // braking, coasting, in Neutral, etc.) — bar drains back to empty
+    gpGearRevGear = null; gpGearRevStartTime = null; gpGearFullSince = null;
+  }
+
+  // Brake-hold auto-reverse: braking alone just decelerates the car as
+  // normal (see the momentum-kill above) — it's only once the car has
+  // actually come to a full stop, and the brake is STILL held for one
+  // more continuous second, that it auto-shifts into Reverse and starts
+  // driving backward by itself. Releasing the brake at any point (before
+  // or after reverse engages) resets this entirely; a fresh press starts
+  // the whole "decelerate to a stop, then hold to reverse" sequence over
+  // again from scratch, exactly like the first time.
+  //
+  // brakeAutoReversing is a deliberate LATCH: once engaged, everything
+  // below skips the "stopped" check entirely and just keeps calling
+  // moveBackward() on schedule. Without it, the very act of reversing
+  // breaks its own detection — moveBackward() itself sets
+  // car.momentumDir='backward' (to arm coasting, same as any other
+  // reverse input), which made the very next tick's "stopped" check
+  // (car.momentumDir==null) false, silently resetting brakeStoppedSince
+  // and stalling further reverse steps until momentum happened to decay
+  // back to null and the whole 1-second wait restarted — producing
+  // exactly the "keeps coming to a stop" stutter this fixes.
+  if(brakeValue > 0.5){
+    if(brakeAutoReversing){
+      if(now >= gpThrottleNextStepTime){
+        moveBackward();
+        gpThrottleNextStepTime = now + REPEAT_RATE;
+      }
+    } else {
+      const stopped = car.momentumDir==null && effectiveThrottle <= 0.05;
+      if(!stopped){
+        brakeStoppedSince = null; // still moving — haven't earned the stopped-timer yet
+      } else {
+        if(brakeStoppedSince==null){
+          brakeStoppedSince = now;
+          if(currentGear > 0) currentGear = 0; // the moment it actually stops, drop to Neutral
+        } else if(now - brakeStoppedSince >= BRAKE_AUTO_REVERSE_DELAY_MS){
+          currentGear = -1;
+          car.reverseHoldStartTime = now; // keeps the existing J-turn-momentum speed-fraction tracking consistent with normal reverse driving
+          brakeAutoReversing = true; // latch on — bypass stopped-detection from here on, until brake is released
+          gpThrottleNextStepTime = now; // fire the first reverse step immediately, don't wait a further REPEAT_RATE
+        }
+      }
+    }
+  } else {
+    brakeStoppedSince = null; // brake released — reset completely
+    brakeAutoReversing = false;
+  }
+}
+
+// The HUD speed readout (text + bar) needs to reflect whichever control
+// scheme is actually driving the car right now — the keyboard/touch path
+// (car.forwardHoldStartTime + forwardStepInterval) and the gamepad path
+// (currentGear + throttleValue/brakeValue) are two independent systems
+// that never touch each other's state, so reading only one of them left
+// the display stuck at "1.00x" the whole time when playing with a
+// gamepad, even at full speed. This checks the gamepad path first (it's
+// the more specific one — only reachable via gear+throttle) and falls
+// back to the keyboard/touch curve otherwise.
+// Text speed readout — matches the tachometer-style rev bar (see
+// gearRevProgress) when driving via gamepad/pedal, since they're
+// presented together as one "Speed" indicator: showing the instantaneous
+// throttle-proportional value here while the bar shows the slower rev
+// curve would make the two visibly disagree. Capped by lastEffectiveThrottle
+// so, e.g., at 50% throttle this can never read above 50% of the gear's
+// top speed even if the rev curve has ramped further on its own. Falls
+// back to the keyboard/touch acceleration curve when not actively gear-driving.
+function currentDisplaySpeedMultiplier(now){
+  if(typeof currentGear!=='undefined' && currentGear>0 && gpGearRevGear===currentGear && gpGearRevStartTime!=null){
+    const cappedProgress = Math.min(gearRevProgress(now), lastEffectiveThrottle);
+    return GEAR_SPEED_MULTIPLIER[currentGear] * cappedProgress * nitroBoostFactor(now);
+  }
+  return car.forwardHoldStartTime==null ? 1.0 : REPEAT_RATE/forwardStepInterval(now);
+}
+
+/* ------------------------------------------------------------
+   Dynamic camera: pulls back and shifts framing toward the top of the
+   screen while the player is actively accelerating (more road visible
+   ahead, at the cost of feeling a bit more distant/urgent), then eases
+   back to the normal centered framing once speed levels off. Driven by
+   currentDisplaySpeedMultiplier() — the same unified speed signal the
+   HUD already uses — so it reacts consistently regardless of whether
+   the player is on keyboard, gamepad, or touch.
+   ------------------------------------------------------------ */
+let camPrevSpeedMult = 1;
+let camSmoothedAccel = 0;   // exponential-moving-average of speed change per frame
+let camIntensity = 0;       // 0 = normal framing, 1 = fully pulled-back/shifted
+const CAM_ACCEL_SMOOTHING = 0.08;   // how quickly the accel signal itself responds to noise
+const CAM_ACCEL_THRESHOLD = 0.0025; // speedMult must be rising at least this fast per frame to count as "accelerating"
+const CAM_INTENSITY_RISE_RATE = 0.06; // how quickly the zoom/shift kicks in once accelerating starts
+const CAM_INTENSITY_FALL_RATE = 0.025; // how quickly it settles back once speed levels off (slower — a gentle relax, not a snap)
+const CAM_ZOOM_OUT_AMOUNT = 0.15;  // at full intensity, view is zoomed out by this fraction
+const CAM_TOP_SHIFT = 0.22;        // at full intensity, player anchor moves this fraction of the screen height higher
+
+const CAM_MAX_SPEED_MULT_FOR_NORM = MAX_SPEED_MULTIPLIER; // "highest speed" reference = sustained top gear/throttle (1.5x) — nitro's extra burst is a transient, not a cruising baseline
+const CAM_RESTING_INTENSITY_AT_MAX_SPEED = 0.75; // once no longer actively accelerating, cruising at top speed still holds 75% of max zoom-out
+function updateDynamicCamera(now){
+  const speedMult = currentDisplaySpeedMultiplier(now);
+  const rawAccel = speedMult - camPrevSpeedMult;
+  camPrevSpeedMult = speedMult;
+  camSmoothedAccel += (rawAccel - camSmoothedAccel) * CAM_ACCEL_SMOOTHING;
+
+  const accelerating = camSmoothedAccel > CAM_ACCEL_THRESHOLD;
+  // Resting target (once not actively accelerating) scales with how
+  // close current speed is to the "highest speed" reference — so idling
+  // or cruising slowly relaxes all the way back to normal framing, but
+  // cruising at or near top speed settles at a substantial persistent
+  // zoom-out instead of fully resetting just because you've stopped
+  // speeding UP. While actively accelerating, intensity still pushes
+  // toward the full 1.0 peak regardless of current speed.
+  const speedFraction = Math.max(0, Math.min(1, (speedMult-1)/(CAM_MAX_SPEED_MULT_FOR_NORM-1)));
+  const restingTarget = speedFraction * CAM_RESTING_INTENSITY_AT_MAX_SPEED;
+  const targetIntensity = accelerating ? 1 : restingTarget;
+  const rate = targetIntensity > camIntensity ? CAM_INTENSITY_RISE_RATE : CAM_INTENSITY_FALL_RATE;
+  camIntensity += (targetIntensity - camIntensity) * rate;
+}
+
+// Camera rotation lag: with ROTATE_CAMERA_WITH_PLAYER, the camera used to
+// be locked EXACTLY to car.vAngle every frame — so even though the car's
+// own heading already eases toward its target (see ANGLE_EASE), the
+// camera copied that value with zero additional delay, meaning the whole
+// world snapped into sync with the car's rotation instantly. Giving the
+// camera its OWN, slower trailing angle instead means the world visibly
+// keeps rotating for a moment after the car has already turned — a
+// weightier, more "chase camera" feel through turns, distinct from (and
+// on top of) the car's own turn animation.
+let camAngle = car.vAngle;
+const CAM_ANGLE_LAG_EASE = 0.05; // slower than the car's own ANGLE_EASE, so the lag is clearly perceptible
+function updateCameraAngleLag(){
+  let diff = car.vAngle - camAngle;
+  while(diff > Math.PI) diff -= Math.PI*2;
+  while(diff < -Math.PI) diff += Math.PI*2;
+  camAngle += diff * CAM_ANGLE_LAG_EASE;
+}
+
+// Speed-bar forward-zone fill fraction (0..1). While driving via gamepad/
+// pedal in a forward gear, this is the per-gear rev progress, CAPPED by
+// current throttle depth (lastEffectiveThrottle) — the bar can never fill
+// past your current pedal/trigger position, e.g. half-throttle caps it at
+// half-full, and since a gear only auto-upshifts once this reaches
+// GEAR_FULL_THRESHOLD, partial throttle by design never triggers one.
+// Falls back to the old global-range calc the keyboard/touch path always used.
+function currentDisplaySpeedBarPct(now){
+  if(typeof currentGear!=='undefined' && currentGear>0 && gpGearRevGear===currentGear && gpGearRevStartTime!=null){
+    return Math.max(0, Math.min(1, Math.min(gearRevProgress(now), lastEffectiveThrottle)));
+  }
+  const speedMult = currentDisplaySpeedMultiplier(now);
+  return Math.max(0, Math.min(1, (speedMult-1)/(MAX_SPEED_MULTIPLIER-1)));
+}
+
+let gpButtonPrev = {};
+let gpStickDir = null;
+
+/* ============================================================
+   RENDERING
+   ============================================================ */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+const COLOR_ROAD = '#4a4d52';
+const COLOR_ROAD_EDGE = '#3a3d42';
+const BUILDING_COLORS = ['#c9b896','#b9a583','#cbb897','#a99a7c','#bfae8c','#c2ad86'];
+
+// Speed-bar color: red at 0% of top speed, through yellow at 50%, to
+// green at 100% — two linear segments (red->yellow, yellow->green)
+// rather than a single 3-stop gradient, so it passes cleanly through
+// yellow at the midpoint instead of a muddy blend.
+const SPEED_COLOR_STOPS = { red:[231,76,60], yellow:[241,196,15], green:[46,204,113] };
+function lerp(a,b,t){ return a+(b-a)*t; }
+function speedBarColor(pct){ // pct: 0..1
+  const [c1,c2,t] = pct < 0.5
+    ? [SPEED_COLOR_STOPS.red, SPEED_COLOR_STOPS.yellow, pct/0.5]
+    : [SPEED_COLOR_STOPS.yellow, SPEED_COLOR_STOPS.green, (pct-0.5)/0.5];
+  const r = Math.round(lerp(c1[0],c2[0],t));
+  const g = Math.round(lerp(c1[1],c2[1],t));
+  const b = Math.round(lerp(c1[2],c2[2],t));
+  return `rgb(${r},${g},${b})`;
+}
+
+function blockColor(i,j){
+  return BUILDING_COLORS[(i*7+j*13)%BUILDING_COLORS.length];
+}
+
+const ROTATE_CAMERA_WITH_PLAYER = true; // camera spins to keep the car pointing "up" on screen
+
+// Draws one police car sprite (used for both the primary patrol unit and
+// the backup unit) at its current eased visual position. `visible` gates
+// whether anything is drawn at all (false while despawned/inactive).
+// `bodyColor` lets the two units be told apart at a glance.
+function drawPoliceCar(unit, visible, bodyColor){
+  if(!visible) return;
+  const pCarW = CELL_PX*0.9, pCarL = CELL_PX*1.6;
+  ctx.save();
+  ctx.translate(unit.vx, unit.vy);
+  ctx.rotate(unit.vAngle);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(-pCarW/2+2, -pCarL/2+3, pCarW, pCarL);
+  // body
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(-pCarW/2, -pCarL/2, pCarW, pCarL);
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fillRect(-pCarW/2, -pCarL*0.05, pCarW, pCarL*0.35);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-pCarW/2, -pCarL/2, pCarW, pCarL);
+  // windshield
+  ctx.fillStyle = '#8fd0ff';
+  ctx.fillRect(-pCarW/2+4, -pCarL/2+6, pCarW-8, pCarL*0.24);
+  // headlights (front, -y)
+  ctx.fillStyle = '#fff9c4';
+  ctx.fillRect(-pCarW/2+1, -pCarL/2, 4, 3);
+  ctx.fillRect(pCarW/2-5, -pCarL/2, 4, 3);
+  // taillights (rear, +y)
+  ctx.fillStyle = '#ff3b3b';
+  ctx.fillRect(-pCarW/2+1, pCarL/2-3, 4, 3);
+  ctx.fillRect(pCarW/2-5, pCarL/2-3, 4, 3);
+  // flashing light bar on the roof, alternating red/blue
+  const flash = Math.floor(performance.now()/220) % 2 === 0;
+  ctx.fillStyle = flash ? '#ff2b2b' : '#2b6bff';
+  ctx.fillRect(-pCarW/2+2, -pCarL*0.08, pCarW-4, pCarL*0.12);
+  ctx.restore();
+}
+
+function draw(){
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = COLOR_ROAD;
+  ctx.fillRect(0,0,w,h); // safety base layer so rotated corners are never blank
+
+  const camRotation = ROTATE_CAMERA_WITH_PLAYER ? -camAngle : 0;
+  // Dynamic zoom/framing while accelerating — see updateDynamicCamera().
+  // Zoom < 1 pulls the view back (more world visible); shifting the
+  // anchor point up moves the player toward the top of the screen
+  // (more road visible ahead, since the camera stays locked to the
+  // player's heading, "ahead" is always "up" on screen).
+  const camZoom = 1 - CAM_ZOOM_OUT_AMOUNT*camIntensity;
+  const camAnchorY = h/2 - h*CAM_TOP_SHIFT*camIntensity;
+
+  // Single world transform: screen = rotate(worldPoint - carPos, camRotation) + screenCenter.
+  // Everything below is drawn in raw world (cell) coordinates — no more
+  // manual offX/offY math — so this one transform handles panning AND
+  // (when enabled) spinning the whole city around the car.
+  ctx.save();
+  ctx.translate(w/2, camAnchorY);
+  ctx.scale(camZoom, camZoom);
+  ctx.rotate(camRotation);
+  ctx.translate(-car.vx, -car.vy);
+
+  // world bounds edge (grass beyond the city) — generous margin since
+  // rotation can expose corners a simple pan never would
+  ctx.fillStyle = '#20351f';
+  const worldPxW = GRID*CELL_PX, worldPxH = GRID*CELL_PX;
+  const M = 1200;
+  ctx.fillRect(-M, -M, worldPxW+M*2, M); // top
+  ctx.fillRect(-M, worldPxH, worldPxW+M*2, M); // bottom
+  ctx.fillRect(-M, -M, M, worldPxH+M*2); // left
+  ctx.fillRect(worldPxW, -M, M, worldPxH+M*2); // right
+
+  // city road bed
+  ctx.fillStyle = COLOR_ROAD;
+  ctx.fillRect(0, 0, worldPxW, worldPxH);
+  ctx.strokeStyle = COLOR_ROAD_EDGE;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, worldPxW, worldPxH);
+
+  // buildings (one block each) — drawing all 100 every frame is cheap
+  // enough that per-block screen-space culling isn't worth the extra
+  // complexity once the view can rotate
+  for(let i=0;i<BLOCKS;i++){
+    for(let j=0;j<BLOCKS;j++){
+      const bx = i*PERIOD + ROAD_CELLS;
+      const by = j*PERIOD + ROAD_CELLS;
+      const px = bx*CELL_PX;
+      const py = by*CELL_PX;
+      const size = BLOCK_CELLS*CELL_PX;
+      ctx.fillStyle = blockColor(i,j);
+      ctx.fillRect(px,py,size,size);
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px,py,size,size);
+      // simple inset to suggest a building footprint
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.strokeRect(px+6,py+6,size-12,size-12);
+    }
+  }
+
+  // lane divider dashed lines (center of each 2-lane road strip)
+  ctx.strokeStyle = '#e8d24a';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10,10]);
+  for(let i=0;i<=BLOCKS;i++){
+    const base = i*PERIOD;
+    const x = (base+1)*CELL_PX; // boundary between offset0/offset1
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, worldPxH);
+    ctx.stroke();
+  }
+  for(let j=0;j<=BLOCKS;j++){
+    const base = j*PERIOD;
+    const y = (base+1)*CELL_PX;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(worldPxW, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  drawSkidMarks(performance.now());
+  drawPickups(performance.now());
+
+  // police car (patrol AI) — hidden entirely while despawned (health hit 0)
+  drawPoliceCar(police, !police.despawned, '#1c1e22');
+  // backup cop (spawned when the player rams the primary one) — navy body
+  // so the two are visually distinguishable at a glance
+  drawPoliceCar(police2, police2.active, '#1a2440');
+
+  // car — note: when ROTATE_CAMERA_WITH_PLAYER is on, camRotation now
+  // trails car.vAngle via camAngle's own slower lag ease (see
+  // updateCameraAngleLag()) rather than cancelling it exactly — so
+  // DURING a turn the car visibly rotates within the screen frame as the
+  // world lags behind it, only settling back to pointing straight up
+  // once the camera catches up. That's the intended effect of the lag,
+  // not a bug. The car's true position (car.vx,vy) is never nudged for
+  // the fishtail effect — only the ROTATION is, and only around a pivot
+  // near the front axle (see below) — so the front stays essentially
+  // planted where it really is, while the rear swings out. A separate
+  // rigid translate would move the front just as much as the rear and
+  // ruin that read, so there isn't one.
+  const carW = CELL_PX*0.9, carL = CELL_PX*1.6;
+  const fishtailAngle = getFishtailAngle(performance.now());
+  ctx.save();
+  ctx.translate(car.vx, car.vy);
+  ctx.rotate(car.vAngle); // base heading — pivots at the car's center, as normal
+  // The fishtail WOBBLE specifically pivots near the front axle (~15% of
+  // the car's length back from the front bumper) rather than the center,
+  // so it reads as the rear end swinging out around the front wheels
+  // instead of the whole car spinning in place — moved even closer to the
+  // front than before (was 20%) to lengthen the rear's swing arc for a
+  // more dramatic, clearly "aggressive slide" look. Front is at local
+  // y=-carL/2, so the pivot sits at y = -carL/2 + 0.15*carL = -0.35*carL.
+  const fishtailPivotY = -carL*0.35;
+  ctx.translate(0, fishtailPivotY);
+  ctx.rotate(fishtailAngle);
+  ctx.translate(0, -fishtailPivotY);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(-carW/2+2, -carL/2+3, carW, carL);
+  // body
+  ctx.fillStyle = '#a12020';
+  ctx.fillRect(-carW/2, -carL/2, carW, carL);
+  ctx.strokeStyle = '#3a0a0a';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-carW/2, -carL/2, carW, carL);
+  // windshield (toward front, i.e. -y local before rotate = "up")
+  ctx.fillStyle = '#8fd0ff';
+  ctx.fillRect(-carW/2+4, -carL/2+6, carW-8, carL*0.28);
+  // headlights (front, -y)
+  ctx.fillStyle = '#fff9c4';
+  ctx.fillRect(-carW/2+1, -carL/2, 4, 3);
+  ctx.fillRect(carW/2-5, -carL/2, 4, 3);
+  // taillights (rear, +y)
+  ctx.fillStyle = '#ff3b3b';
+  ctx.fillRect(-carW/2+1, carL/2-3, 4, 3);
+  ctx.fillRect(carW/2-5, carL/2-3, 4, 3);
+  ctx.restore();
+
+  // highlight the relevant intersection box when a turn is available —
+  // either the box the car is standing in, or the upcoming one if the
+  // car is one snap early
+  if(inTurnZone(car.cx,car.cy,car.heading)){
+    const {boxCx, boxCy} = getTurnBoxOrigin(car.cx,car.cy,car.heading);
+    ctx.strokeStyle = '#5cff5c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(boxCx*CELL_PX+1, boxCy*CELL_PX+1, ROAD_CELLS*CELL_PX-2, ROAD_CELLS*CELL_PX-2);
+  }
+
+  ctx.restore(); // end world transform
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+function updateHUD(){
+  document.getElementById('hHeading').textContent = car.heading;
+  document.getElementById('hCell').textContent = car.cx+','+car.cy;
+  const ready = inTurnZone(car.cx,car.cy,car.heading);
+  const t = document.getElementById('hTurn');
+  if(ready){
+    t.innerHTML = '<span class="turnReady">Intersection — turn available!</span>';
+  } else if(car.laneChangeLockTicks>0){
+    t.textContent = 'Straight road (lane change locked — drive ' + car.laneChangeLockTicks + ' more)';
+  } else if(car.downInputLockTicks>0){
+    t.textContent = 'Straight road (reverse locked — drive ' + car.downInputLockTicks + ' more)';
+  } else {
+    t.textContent = 'Straight road';
+  }
+  const hp = document.getElementById('hPolice');
+  if(police.despawned){
+    const remainingS = Math.max(0, Math.ceil((POLICE_RESPAWN_COOLDOWN_MS-(performance.now()-policeDespawnAt))/1000));
+    hp.textContent = 'DESPAWNED (back in ' + remainingS + 's)';
+    hp.style.color = '#888';
+  } else {
+    hp.textContent = police.state;
+    hp.style.color = police.state==='PURSUIT' ? '#ff5c5c' : police.state==='PATROL' ? '#5cff5c' : '#ffd25c';
+  }
+  const hph = document.getElementById('hPlayerHealth');
+  hph.textContent = Math.round(car.health) + '%';
+  hph.style.color = car.health<=25 ? '#ff5c5c' : car.health<=60 ? '#ffd25c' : '#5cff5c';
+  const hch = document.getElementById('hPoliceHealth');
+  hch.textContent = police.despawned ? '—' : Math.round(police.health) + '%';
+  hch.style.color = police.despawned ? '#888' : police.health<=25 ? '#ff5c5c' : police.health<=60 ? '#ffd25c' : '#5cff5c';
+  const hbRow = document.getElementById('hBackupRow');
+  if(police2.active){
+    hbRow.style.display = '';
+    const hbh = document.getElementById('hBackupHealth');
+    hbh.textContent = Math.round(police2.health) + '%';
+    hbh.style.color = police2.health<=25 ? '#ff5c5c' : police2.health<=60 ? '#ffd25c' : '#5cff5c';
+  } else {
+    hbRow.style.display = 'none';
+  }
+  {
+    const nowT = performance.now();
+    const boosting = car.nitroActivatedAt!=null;
+    const onCooldown = !boosting && nowT < car.nitroCooldownUntil;
+    const hn = document.getElementById('hNitro');
+    hn.textContent = car.nitroCharges + '/' + NITRO_MAX_CHARGES + (boosting ? ' — BOOST!' : onCooldown ? ' — cooling down' : '');
+    hn.style.color = boosting ? '#b98cff' : onCooldown ? '#ffd25c' : car.nitroCharges>0 ? '#5cff5c' : '#888';
+    nitroBtn.classList.toggle('boosting', boosting);
+    nitroBtn.classList.toggle('unavailable', !boosting && (car.nitroCharges<=0 || onCooldown));
+    const pips = document.querySelectorAll('#nitroPips .pip');
+    pips.forEach((pip,i)=> pip.classList.toggle('filled', i < car.nitroCharges));
+  }
+  const speedMult = currentDisplaySpeedMultiplier(performance.now());
+  const hs = document.getElementById('hSpeed');
+  hs.textContent = speedMult.toFixed(2)+'x';
+  hs.style.color = speedMult>1.01 ? '#5cff5c' : '';
+  {
+    const gearLabel = currentGear===-1 ? 'R' : currentGear===0 ? 'N' : String(currentGear);
+    const gearClass = currentGear===-1 ? 'gear-reverse' : currentGear===0 ? 'gear-neutral' : 'gear-forward';
+    document.getElementById('hGear').textContent = gearLabel;
+    const pod = document.getElementById('gearPod');
+    pod.classList.remove('gear-forward','gear-reverse','gear-neutral');
+    pod.classList.add(gearClass);
+    document.getElementById('gearValue').textContent = gearLabel;
+  }
+  // Forward-speed zone (right 80% of the bar): fills left-to-right from
+  // the 20% mark, same red->yellow->green mapping as before. Per-gear
+  // tachometer-style ramp while driving via gamepad (see
+  // currentDisplaySpeedBarPct); global-range calc otherwise.
+  const speedPct = currentDisplaySpeedBarPct(performance.now());
+  const ff = document.getElementById('speedBarForwardFill');
+  ff.style.width = (speedPct*80).toFixed(1)+'%'; // 80% = the size of this zone within the track
+  ff.style.background = speedBarColor(speedPct);
+  // Reverse zone (left 20% of the bar): fills right-to-left, anchored at
+  // the 20% mark, reflecting how much reverse "speed" has built up (the
+  // same value that determines how strong a J-turn's preserved momentum
+  // will be if triggered right now — see reverseSpeedFraction/spinCar180).
+  // The J-turn itself is now triggered by attempting a lane-change while
+  // reversing, not by holding — so this is no longer a charge-up-to-
+  // auto-trigger countdown, just a "how much reverse momentum is
+  // available" readout.
+  const reverseProgress = holds.S.held ? reverseSpeedFraction(performance.now()) : 0;
+  const rf = document.getElementById('speedBarReverseFill');
+  rf.style.width = (reverseProgress*20).toFixed(1)+'%'; // 20% = the size of this zone within the track
+  rf.style.background = speedBarColor(reverseProgress);
+  const hg = document.getElementById('hGamepad');
+  if(gamepadBlocked){
+    hg.textContent = 'Gamepad: unavailable (blocked by this browser)';
+    hg.style.color = '#ffd25c';
+  } else {
+    hg.textContent = 'Gamepad: ' + (gamepadConnected ? 'connected' : 'not connected');
+    hg.style.color = gamepadConnected ? '#5cff5c' : '';
+  }
+}
+
+function tick(now){
+  now = now || performance.now();
+  // Snapshot this frame's starting positions BEFORE anything moves, so
+  // checkCollision() can sweep-check each vehicle's path this frame
+  // (catches high-speed tunneling through the other car — see
+  // segmentPointMinDistance) rather than only comparing single points.
+  car.prevCx = car.cx; car.prevCy = car.cy;
+  police.prevCx = police.cx; police.prevCy = police.cy;
+  if(police2.active){ police2.prevCx = police2.cx; police2.prevCy = police2.cy; }
+  pollGamepad(now);
+  if(gameState!=='BUSTED'){
+    // Combine whichever input source(s) are actively pressed this frame —
+    // gamepad trigger, touch pedal, and/or the keyboard's Arrow Up/Down
+    // lever level — so any of them can drive the car; using more than
+    // one at once (unlikely, but harmless) just takes whichever is
+    // strongest rather than fighting each other. keyboardThrottleLevel is
+    // signed (direction lives in currentGear already), so only its
+    // magnitude feeds in here.
+    const rawThrottle = Math.max(gpRawThrottle, pedalAccelFraction, Math.abs(keyboardThrottleLevel));
+    const rawBrake = Math.max(gpRawBrake, pedalBrakePressed ? 1 : 0, keyboardBrakeHeld ? 1 : 0);
+    updateDrivetrain(now, rawThrottle, rawBrake);
+    // Single source of truth for the GAS pedal's visual fill: the actual
+    // eased throttleValue updateDrivetrain just computed, which already
+    // reflects whichever input drove it this frame — touch/mouse drag,
+    // Arrow Up/Down, OR the gamepad's analog right trigger. Previously
+    // only touch and keyboard ever touched this element directly, so a
+    // gamepad trigger never showed up on the on-screen pedal at all.
+    accelPedalFillEl.style.height = (Math.max(0,throttleValue)*100).toFixed(0)+'%';
+  }
+  updateHolds(now);
+  updateMomentum(now);
+  updateNitro(now);
+  if(car.fishtail || now < car.skidUntil) spawnSkidMarks(now);
+  updatePickups(now);
+  updateDynamicCamera(now);
+  updatePolice(now);
+  car.vx += (car.targetVx-car.vx)*(car.moveEaseRate||POS_EASE);
+  car.vy += (car.targetVy-car.vy)*(car.moveEaseRate||POS_EASE);
+  car.vAngle += (car.targetAngle-car.vAngle)*ANGLE_EASE;
+  updateCameraAngleLag(); // camera trails car.vAngle with its own, slower ease — see comment above
+  police.vx += (police.targetVx-police.vx)*(police.moveEaseRate||POS_EASE);
+  police.vy += (police.targetVy-police.vy)*(police.moveEaseRate||POS_EASE);
+  police.vAngle += (police.targetAngle-police.vAngle)*ANGLE_EASE;
+  if(police2.active){
+    police2.vx += (police2.targetVx-police2.vx)*(police2.moveEaseRate||POS_EASE);
+    police2.vy += (police2.targetVy-police2.vy)*(police2.moveEaseRate||POS_EASE);
+    police2.vAngle += (police2.targetAngle-police2.vAngle)*ANGLE_EASE;
+  }
+  draw();
+  updateHUD();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+})();
+</script>
+</body>
+</html>

@@ -128,7 +128,9 @@
   #legend{
     position:fixed; top:10px; right:10px; color:#ccc; font-size:11px; text-align:right;
     background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:6px; pointer-events:none; max-width:200px;
+    display:none; /* hidden by default — toggled with the 'i' key, see keydown handler */
   }
+  #legend.show{ display:block; }
   #resetBtn{
     position:fixed; bottom:230px; left:18px; pointer-events:auto; z-index:5;
     background:rgba(30,30,35,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3);
@@ -1704,6 +1706,12 @@ window.addEventListener('keydown', (e)=>{
     if(e.repeat) return;
     keyboardBrakeHeld = true;
     brakePedalEl.classList.add('pressed'); // same visual feedback the touch/mouse brake press already gives
+    return;
+  }
+  if(e.key==='i' || e.key==='I'){
+    e.preventDefault();
+    if(e.repeat) return;
+    document.getElementById('legend').classList.toggle('show');
     return;
   }
   // W/S are dedicated gear-shift keys on desktop — one shift per press,
